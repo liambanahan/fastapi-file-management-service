@@ -92,3 +92,23 @@ We welcome contributions from everyone! If you have ideas for improvements, new 
     - Please make sure your code follows the project's coding standards and passes all tests.
 
 We appreciate your contributions and will do our best to review and merge your pull requests promptly. Thank you for helping us improve this project!
+
+Frontend:
+
+## Frontend
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+
+
+After running the Docker Containers, simply start the frontend using the following command. We have implemented CORS for backend integration.
+
+```bash
+npm run dev
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
