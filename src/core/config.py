@@ -19,7 +19,7 @@ class Config:
     MINIO_PRIVATE_BUCKET = os.getenv('MINIO_PRIVATE_BUCKET', 'private')
 
     MYSQL_USER = os.getenv('MYSQL_USER', 'root')
-    MYSQL_PASSWORD = os.getenv('MYSQL_ROOT_PASSWORD', 'password')
+    MYSQL_PASSWORD = os.getenv('MYSQL_PASSWORD', 'password')
     MYSQL_HOST = os.getenv('MYSQL_HOST', 'db-mysql')
     MYSQL_PORT = os.getenv('MYSQL_PORT', '3306')
     MYSQL_DATABASE = os.getenv("MYSQL_DATABASE", "filemanager")

@@ -5,3 +5,4 @@ src/supervisord.log
 src/supervisord.pid
 src/.coverage
 src/coverage.xml
+.env
