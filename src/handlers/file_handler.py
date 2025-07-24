@@ -45,7 +45,7 @@ class FileHandler(BaseHandler[FileService]):
             return self.response.error(ErrorResponse(message="An error occurred during chunk upload"), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     async def upload_complete(self, upload_id: str, total_chunks: int, total_size: int, file_extension: FileExtension,
-                              content_type: str, credential: str, detail: str, size: int = 0) -> JSONResponse:
+                              content_type: str, credential: str, detail: str, appointment: str, size: int = 0) -> JSONResponse:
         logger.info("=== UPLOAD_COMPLETE HANDLER CALLED ===")
         try:
             logger.info(f"Starting upload_complete for upload_id: {upload_id}")
@@ -61,7 +61,8 @@ class FileHandler(BaseHandler[FileService]):
                 detail_dict = None
                 
             payload = UploadFileDTO(upload_id=upload_id, total_chunks=total_chunks, total_size=total_size, file_extension=file_extension,
-                                    content_type=content_type, detail=detail_dict, credential=credential_dict, size=size)
+                                    content_type=content_type, detail=detail_dict, credential=credential_dict, size=size,
+                                    appointment=appointment)
             
             logger.info(f"Calling service.upload_complete with payload: {payload}")
             file = await self.service.upload_complete(payload=payload)
@@ -111,3 +112,18 @@ class FileHandler(BaseHandler[FileService]):
             return self.response.success(content=SuccessResponse[FileResponse](data=data))
         except BaseException as exception:
             return self.response.error(ErrorResponse(message=exception.message), status=exception.status)
+
+    async def get_files_by_appointment(self, appointment: str) -> JSONResponse:
+        files = await self.service.get_files_by_appointment(appointment)
+        files_response = []
+        for file in files:
+            download_url = await self.service.get_download_link(file)
+            files_response.append(FileResponse(id=file.id, path=file.path, credential=file.credential,
+                                               content_type=file.content_type, detail=file.detail, download_url=download_url))
+        return self.response.success(content=SuccessResponse[list[FileResponse]](data=files_response))
+
+    async def delete_file(self, file_id: str) -> JSONResponse:
+        deleted_file = await self.service.delete_file(file_id)
+        if not deleted_file:
+            return self.response.error(ErrorResponse(message="File not found"), status=status.HTTP_404_NOT_FOUND)
+        return self.response.success(content=SuccessResponse(message="File deleted successfully."))

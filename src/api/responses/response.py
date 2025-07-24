@@ -6,7 +6,7 @@ T = TypeVar('T')
 
 
 class SuccessResponse(BaseModel, Generic[T]):
-    data: T
+    data: Optional[T] = None
     message: Optional[str] = ''
     success: bool = True
 

@@ -18,9 +18,14 @@ interface UploadCompleteResponse {
   };
 }
 
+interface FileUploaderProps {
+  appointment: string;
+  onUploadSuccess: (newFile: UploadCompleteResponse['data']) => void;
+}
+
 const API_BASE_URL = 'http://localhost:8000/api/v1/file';
 
-export default function FileUploader() {
+export default function FileUploader({ appointment, onUploadSuccess }: FileUploaderProps) {
   const [file, setFile] = useState<File | null>(null);
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState('Please select a file to upload.');
@@ -92,6 +97,7 @@ export default function FileUploader() {
       completeFormData.append('total_size', file.size.toString());
       completeFormData.append('file_extension', fileExtension);
       completeFormData.append('content_type', file.type);
+      completeFormData.append('appointment', appointment); // Add this line
       
       const completeResponse = await fetch(`${API_BASE_URL}/upload/complete/`, {
         method: 'POST',
@@ -103,6 +109,7 @@ export default function FileUploader() {
       const completeJson: UploadCompleteResponse = await completeResponse.json();
       setUploadedFile(completeJson.data);
       setStatus('Upload successful! Your file is being processed.');
+      onUploadSuccess(completeJson.data); // Call the callback with the new file data
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';

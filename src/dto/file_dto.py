@@ -17,6 +17,7 @@ class UploadFileDTO(BaseModel):
     content_type: str
     detail: Optional[Dict[str, Any]]
     credential: Optional[Dict[str, Any]]
+    appointment: str
 
 class RetryUploadFileDTO(BaseModel):
     id: str
@@ -29,6 +30,7 @@ class FileBaseDTO(BaseModel):
     size: int
     detail: Optional[Dict[str, Any]]
     celery_task_id: str
+    appointment: str
 
 class FileDTO(FileBaseDTO):
     id: str

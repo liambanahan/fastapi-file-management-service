@@ -8,6 +8,7 @@ class File(db.Base):
     __tablename__ = "files"
     id = Column(VARCHAR(36), nullable=False, primary_key=True, unique=True,
                 index=True, default=lambda: str(uuid.uuid4()))
+    appointment = Column(String(255), nullable=False, index=True) # This line is important
     credential = Column(JSON(none_as_null=True))
     path = Column(VARCHAR(255), nullable=False)
     content_type = Column(String(32), nullable=False)
