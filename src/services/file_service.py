@@ -16,7 +16,10 @@ from core.config import config
 from celery.result import AsyncResult
 from tasks import celery
 from constants.upload_stauts import UploadStatus
+import logging
+import traceback
 
+logger = logging.getLogger(__name__)
 
 class FileService(BaseService[FileRepo]):
     def __init__(self, repo: FileRepo) -> None:
@@ -43,18 +46,51 @@ class FileService(BaseService[FileRepo]):
             await chunk_file.write(content)
 
     async def upload_complete(self, payload: UploadFileDTO) -> File:
-        if not payload.credential:
-            bucket = minioStorage.public_bucket
-        else:
-            bucket = minioStorage.private_bucket
-        filename = f"{payload.upload_id}.{payload.file_extension.value}"
-        if not os.path.exists(os.path.join(config.APP_UPLOAD_DIR, payload.upload_id)):
-            raise FileNotFoundError
-        celery_task = upload_file_task.delay(bucket=bucket, upload_id=payload.upload_id,
-                                             total_chunks=payload.total_chunks, filename=filename)
-        file = self.repo.create_file(FileBaseDTO(path=bucket + "/" + filename, content_type=payload.content_type, detail=payload.detail,
-                                                 size=payload.total_size, credential=payload.credential, celery_task_id=celery_task.id))
-        return file
+        try:
+            logger.info(f"Starting upload_complete for upload_id: {payload.upload_id}")
+            
+            # Check if upload directory exists
+            upload_path = os.path.join(config.APP_UPLOAD_DIR, payload.upload_id)
+            if not os.path.exists(upload_path):
+                logger.error(f"Upload directory not found: {upload_path}")
+                raise FileNotFoundError(f"Upload directory not found for upload_id: {payload.upload_id}")
+            
+            # Determine bucket
+            if not payload.credential:
+                bucket = minioStorage.public_bucket
+            else:
+                bucket = minioStorage.private_bucket
+                
+            filename = f"{payload.upload_id}.{payload.file_extension.value}"
+            logger.info(f"Creating Celery task for bucket: {bucket}, filename: {filename}")
+            
+            # Create Celery task
+            celery_task = upload_file_task.delay(bucket=bucket, upload_id=payload.upload_id,
+                                                 total_chunks=payload.total_chunks, filename=filename)
+            logger.info(f"Celery task created with ID: {celery_task.id}")
+            
+            # Create file record in database
+            file_dto = FileBaseDTO(
+                path=bucket + "/" + filename, 
+                content_type=payload.content_type, 
+                detail=payload.detail,
+                size=payload.total_size, 
+                credential=payload.credential, 
+                celery_task_id=celery_task.id
+            )
+            logger.info(f"Creating file record with DTO: {file_dto}")
+            
+            file = self.repo.create_file(file_dto)
+            logger.info(f"File record created successfully with ID: {file.id}")
+            return file
+            
+        except FileNotFoundError:
+            # Re-raise FileNotFoundError as is
+            raise
+        except Exception as e:
+            logger.error(f"Error in upload_complete: {str(e)}\n{traceback.format_exc()}")
+            # Re-raise the original exception so it can be handled by the handler
+            raise
 
     async def get_download_link(self, file: File) -> str:
         bucket_name = file.path.split("/")[0]

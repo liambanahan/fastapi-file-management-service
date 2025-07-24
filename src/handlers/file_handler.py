@@ -12,7 +12,11 @@ from constants.errors import Errors
 from typing import Dict, Any
 from core.config import config
 from utils import parse_json_to_dict
+import logging
+import traceback
 
+# Configure logging
+logger = logging.getLogger(__name__)
 
 class FileHandler(BaseHandler[FileService]):
     def __init__(self, service: FileService) -> None:
@@ -34,29 +38,47 @@ class FileHandler(BaseHandler[FileService]):
                 data=UploadChunkResponse(chunk_index=chunk_index, upload_id=upload_id), message=Message.UPLOADED_CHUNK
             ))
         except FileNotFoundError as exc:
+            logger.error(f"File not found error in upload_chunk: {str(exc)}")
             return self.response.error(ErrorResponse(message=Errors.FILE_NOT_FOUND), status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+        except Exception as exc:
+            logger.error(f"Unexpected error in upload_chunk: {str(exc)}\n{traceback.format_exc()}")
+            return self.response.error(ErrorResponse(message="An error occurred during chunk upload"), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     async def upload_complete(self, upload_id: str, total_chunks: int, total_size: int, file_extension: FileExtension,
                               content_type: str, credential: str, detail: str, size: int = 0) -> JSONResponse:
-        if credential:
-            credential_dict = parse_json_to_dict(credential, 'credential')
-        else:
-            credential_dict = None
-
-        if detail:
-            detail_dict = parse_json_to_dict(detail, 'detail')
-        else:
-            detail_dict = None
-        payload = UploadFileDTO(upload_id=upload_id, total_chunks=total_chunks, total_size=total_size, file_extension=file_extension,
-                                content_type=content_type, detail=detail_dict, credential=credential_dict, size=size)
+        logger.info("=== UPLOAD_COMPLETE HANDLER CALLED ===")
         try:
+            logger.info(f"Starting upload_complete for upload_id: {upload_id}")
+            
+            if credential:
+                credential_dict = parse_json_to_dict(credential, 'credential')
+            else:
+                credential_dict = None
+
+            if detail:
+                detail_dict = parse_json_to_dict(detail, 'detail')
+            else:
+                detail_dict = None
+                
+            payload = UploadFileDTO(upload_id=upload_id, total_chunks=total_chunks, total_size=total_size, file_extension=file_extension,
+                                    content_type=content_type, detail=detail_dict, credential=credential_dict, size=size)
+            
+            logger.info(f"Calling service.upload_complete with payload: {payload}")
             file = await self.service.upload_complete(payload=payload)
+            logger.info(f"File created successfully: {file.id}")
+            
             download_url = await self.service.get_download_link(file)
             data = FileResponse(id=file.id, path=file.path, credential=file.credential,
                                 content_type=file.content_type, detail=file.detail, download_url=download_url)
             return self.response.success(content=SuccessResponse[FileResponse](data=data))
+            
         except FileNotFoundError as exc:
+            logger.error(f"File not found error in upload_complete: {str(exc)}")
             return self.response.error(ErrorResponse(message=Errors.FILE_NOT_FOUND), status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+        except Exception as exc:
+            logger.error(f"Unexpected error in upload_complete: {str(exc)}\n{traceback.format_exc()}")
+            # Return a generic error message but log the specific error
+            return self.response.error(ErrorResponse(message="An error occurred during upload completion"), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     async def get_file(self, file_id: str, credential=Dict[str, Any]) -> JSONResponse:
         try:

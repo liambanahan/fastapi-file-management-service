@@ -1,8 +1,8 @@
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.ext.declarative import declarative_base
 from core.config import config
-from typing import Self
+from typing import Self, Generator
 
 class MySQLDB:
     _instance: Self = None
@@ -18,8 +18,11 @@ class MySQLDB:
         self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
         self.Base = declarative_base()
 
-    @property
-    def session(self):
-        return self.SessionLocal()
+    def get_db(self) -> Generator[Session, None, None]:
+        db = self.SessionLocal()
+        try:
+            yield db
+        finally:
+            db.close()
     
 mysql = MySQLDB()

@@ -2,10 +2,11 @@ from infrastructure.db.mysql import MySQLDB
 from .base_repository import BaseRepo
 from entities.file import File
 from dto.file_dto import FileBaseDTO
+from sqlalchemy.orm import Session
 
 
 class FileRepo(BaseRepo[File]):
-    def __init__(self, db: MySQLDB) -> None:
+    def __init__(self, db: Session) -> None:
         super().__init__(File, db)
 
     def get_file(self, id: str) -> File:

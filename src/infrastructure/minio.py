@@ -3,6 +3,7 @@ from core.config import config
 from minio import Minio
 from minio.helpers import ObjectWriteResult
 from typing import Self
+import json
 
 
 class MinioStorage:
@@ -22,10 +23,10 @@ class MinioStorage:
         """
         if cls._instance == None:
             cls._instance = super().__new__(cls)
-            cls._instance.__initialize()
+            cls._instance.__connect()
         return cls._instance
 
-    def __initialize(self) -> None:
+    def __connect(self) -> None:
         self.client = Minio(
             config.MINIO_ENDPOINT,
             access_key=config.MINIO_ACCESS_KEY,
@@ -34,6 +35,29 @@ class MinioStorage:
         )
         self.public_bucket = config.MINIO_PUBLIC_BUCKET
         self.private_bucket = config.MINIO_PRIVATE_BUCKET
+
+    def setup_buckets(self):
+        # This policy allows anyone to read objects from the public bucket
+        public_read_policy = {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Principal": {"AWS": ["*"]},
+                    "Action": ["s3:GetObject"],
+                    "Resource": [f"arn:aws:s3:::{self.public_bucket}/*"],
+                },
+            ],
+        }
+
+        # Ensure the public bucket exists and set its policy
+        if not self.client.bucket_exists(self.public_bucket):
+            self.client.make_bucket(self.public_bucket)
+        self.client.set_bucket_policy(self.public_bucket, json.dumps(public_read_policy))
+
+        # Ensure the private bucket exists
+        if not self.client.bucket_exists(self.private_bucket):
+            self.client.make_bucket(self.private_bucket)
 
     def bucket_exists(self, bucket_name) -> bool:
         """
