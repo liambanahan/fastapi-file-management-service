@@ -12,18 +12,16 @@ class UploadChunkDTO(BaseModel):
 class UploadFileDTO(BaseModel):
     upload_id: str
     total_chunks: int
-    file_extension: FileExtension
     total_size: int
+    file_extension: FileExtension
     content_type: str
+    size: int
     detail: Optional[Dict[str, Any]]
     credential: Optional[Dict[str, Any]]
     appointment: str
 
-class RetryUploadFileDTO(BaseModel):
-    id: str
-    credential: Optional[Dict[str, Any]]
-
 class FileBaseDTO(BaseModel):
+    upload_id: str
     path: str
     credential: Optional[Dict[str, Any]]
     content_type: str
@@ -32,6 +30,7 @@ class FileBaseDTO(BaseModel):
     celery_task_id: str
     appointment: str
 
-class FileDTO(FileBaseDTO):
+class RetryUploadFileDTO(BaseModel):
     id: str
+    credential: Optional[Dict[str, Any]]
 

@@ -14,6 +14,7 @@ class FileRepo(BaseRepo[File]):
 
     def create_file(self, file: FileBaseDTO) -> File:
         db_file = File(
+            upload_id=file.upload_id,
             path=file.path, credential=file.credential, content_type=file.content_type,
             size=file.size, detail=file.detail, celery_task_id=file.celery_task_id,
             appointment=file.appointment
