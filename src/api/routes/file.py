@@ -11,6 +11,7 @@ from api.responses.response import SuccessResponse, ErrorResponse
 from core.config import config
 from constants.file_extensions import FileExtension
 from infrastructure.db.mysql import mysql
+from dto.file_dto import FileResponseDTO
 
 
 router = APIRouter(
@@ -46,11 +47,13 @@ async def endpoint(chunk_size: int = Form(..., le=config.APP_MAX_CHUNK_SIZE),
 async def endpoint(upload_id: str = Form(...), total_chunks: int = Form(...),
                    total_size: int = Form(...), credential: Optional[str] = Form(None),
                    file_extension: FileExtension = Form(...), content_type: str = Form(...),
-                   appointment: str = Form(...),
+                   appointment_id: str = Form(...),
+                   filename: str = Form(...),
                    detail: Optional[str] = Form(None), file_handler: FileHandler = Depends(get_file_handler)):
     return await file_handler.upload_complete(upload_id=upload_id, total_chunks=total_chunks, total_size=total_size,
                                               file_extension=file_extension, content_type=content_type,
-                                              credential=credential, detail=detail, appointment=appointment)
+                                              credential=credential, detail=detail, appointment_id=appointment_id,
+                                              filename=filename)
 
 
 @router.get('/get/{file_id}', response_model=SuccessResponse[FileResponse], responses={
@@ -63,9 +66,14 @@ async def endpoint(file_id: str, request: Request, file_handler: FileHandler = D
     return await file_handler.get_file(file_id=file_id, credential=credential)
 
 
-@router.get("/appointment/{appointment_name}", response_model=SuccessResponse[list[FileResponse]])
-async def get_files_by_appointment(appointment_name: str, file_handler: FileHandler = Depends(get_file_handler)):
-    return await file_handler.get_files_by_appointment(appointment_name)
+@router.get("/appointment/{appointment_id}", response_model=SuccessResponse[list[FileResponseDTO]])
+async def get_files_by_appointment(appointment_id: str, file_handler: FileHandler = Depends(get_file_handler)):
+    return await file_handler.get_files_by_appointment(appointment_id)
+
+
+@router.get("/all", response_model=SuccessResponse[list[FileResponseDTO]])
+async def list_all_files(file_handler: FileHandler = Depends(get_file_handler)):
+    return await file_handler.list_all_files()
 
 
 @router.delete("/{file_id}", response_model=SuccessResponse)

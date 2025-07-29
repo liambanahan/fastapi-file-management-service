@@ -1,57 +1,148 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import FileDashboard from '../components/FileDashboard';
+import { Appointment, FileData } from '../types';
 
-// Hardcoded list of valid appointments
-const VALID_APPOINTMENTS = ['subash', 'appointment2', 'appointment3'];
+const APPOINTMENTS_API_URL = 'http://localhost:8000/api/v1/appointments';
+const FILES_API_URL = 'http://localhost:8000/api/v1/file/all';
 
 export default function Home() {
-  const [appointment, setAppointment] = useState<string>('');
-  const [loggedInAppointment, setLoggedInAppointment] = useState<string | null>(null);
-  const [error, setError] = useState<string>('');
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [allFiles, setAllFiles] = useState<FileData[]>([]);
+  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
+  const [newAppointmentName, setNewAppointmentName] = useState('');
 
-  const handleLogin = () => {
-    if (VALID_APPOINTMENTS.includes(appointment)) {
-      setLoggedInAppointment(appointment);
-      setError('');
-    } else {
-      setError('Not an appointment');
-      // Hide the error message after 3 seconds
-      setTimeout(() => setError(''), 3000);
+  const fetchAppointments = async () => {
+    try {
+      const response = await fetch(APPOINTMENTS_API_URL);
+      const result = await response.json();
+      if (result.success) {
+        setAppointments(result.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch appointments:', error);
     }
   };
 
-  const handleLogout = () => {
-    setLoggedInAppointment(null);
-    setAppointment('');
+  const fetchAllFiles = async () => {
+    try {
+      const response = await fetch(FILES_API_URL);
+      const result = await response.json();
+      if (result.success) {
+        setAllFiles(result.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch all files:', error);
+    }
   };
 
-  if (loggedInAppointment) {
-    return <FileDashboard appointment={loggedInAppointment} onLogout={handleLogout} />;
+  useEffect(() => {
+    fetchAppointments();
+    fetchAllFiles();
+  }, []);
+  
+  const handleCreateAppointment = async () => {
+    if (!newAppointmentName.trim()) return;
+    try {
+      const response = await fetch(APPOINTMENTS_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newAppointmentName }),
+      });
+      const result = await response.json();
+      if (result.success) {
+        setAppointments([...appointments, result.data]);
+        setNewAppointmentName(''); // Clear input
+      }
+    } catch (error) {
+      console.error('Failed to create appointment:', error);
+    }
+  };
+
+  const handleBack = () => {
+    setSelectedAppointment(null);
+    fetchAppointments();
+    fetchAllFiles();
+  };
+
+  if (selectedAppointment) {
+    return <FileDashboard appointment={selectedAppointment} onBack={handleBack} />;
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-24 bg-gray-50">
-      <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md">
-        <h1 className="text-2xl font-bold text-center text-gray-800">Enter Appointment Name</h1>
-        <div className="relative">
-          <input
-            type="text"
-            value={appointment}
-            onChange={(e) => setAppointment(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
-            placeholder="e.g., appointment1"
-            className="w-full px-4 py-2 text-gray-700 bg-gray-100 border rounded-md focus:border-blue-500 focus:ring-blue-500 focus:outline-none focus:ring focus:ring-opacity-40"
-          />
-          {error && <p className="absolute text-sm text-red-600 -bottom-6 left-0">{error}</p>}
+    <main className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+      <div className="container mx-auto p-4 sm:p-6 lg:p-8">
+        <header className="text-center mb-12">
+          <h1 className="text-4xl sm:text-5xl font-extrabold text-gray-800 dark:text-white">
+            File Management Dashboard
+          </h1>
+          <p className="text-lg text-gray-500 dark:text-gray-400 mt-2">
+            Organize your appointments and files with ease.
+          </p>
+        </header>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          
+          {/* Left Column: Appointments */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+            <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-6">Appointments</h2>
+            <div className="space-y-4">
+              {appointments.length > 0 ? (
+                appointments.map((appt) => (
+                  <div
+                    key={appt.id}
+                    onClick={() => setSelectedAppointment(appt)}
+                    className="p-4 bg-gray-50 dark:bg-gray-700 border-l-4 border-transparent hover:border-blue-500 rounded-lg cursor-pointer transition-all duration-200 ease-in-out transform hover:scale-105"
+                  >
+                    <p className="font-semibold text-lg text-gray-800 dark:text-white">{appt.name}</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">{new Date(appt.date).toLocaleDateString()}</p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-center text-gray-500 dark:text-gray-400 py-8">No appointments found.</p>
+              )}
+            </div>
+            <div className="pt-6 border-t border-gray-200 dark:border-gray-700 mt-6">
+              <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-4">Create New Appointment</h3>
+              <div className="flex space-x-3">
+                <input
+                  type="text"
+                  value={newAppointmentName}
+                  onChange={(e) => setNewAppointmentName(e.target.value)}
+                  placeholder="Enter appointment name"
+                  className="flex-grow px-4 py-2 text-gray-800 dark:text-gray-200 bg-gray-100 dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded-md focus:border-blue-500 focus:ring-blue-500 focus:outline-none focus:ring focus:ring-opacity-40"
+                />
+                <button
+                  onClick={handleCreateAppointment}
+                  className="px-6 py-2 font-semibold text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-colors"
+                >
+                  Add
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column: All Files */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+            <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-6">All Files</h2>
+            <div className="space-y-3">
+              {allFiles.length > 0 ? (
+                allFiles.map((file) => (
+                  <div key={file.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                    <span className="font-medium truncate text-gray-700 dark:text-gray-300" title={file.filename}>{file.filename}</span>
+                    <a href={file.download_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300 font-semibold text-sm transition-colors">
+                      Download
+                    </a>
+                  </div>
+                ))
+              ) : (
+                <p className="text-center text-gray-500 dark:text-gray-400 py-8">No files uploaded yet.</p>
+              )}
+            </div>
+          </div>
+
         </div>
-        <button
-          onClick={handleLogin}
-          className="w-full px-4 py-2 font-semibold text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
-        >
-          Enter
-        </button>
       </div>
     </main>
   );

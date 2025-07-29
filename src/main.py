@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
-from api.routes import file
+from api.routes import file, appointment
 from exceptions.handler import ExceptionHandler
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -9,6 +9,9 @@ from api.responses.response import ErrorResponse
 import logging
 import traceback
 import sys
+from infrastructure.db.mysql import mysql
+from services.appointment_service import AppointmentService
+from repositories.appointment_repository import AppointmentRepo
 
 # Configure logging to ensure it outputs to stdout
 logging.basicConfig(
@@ -26,14 +29,24 @@ logger.info("Logging configuration initialized")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # On startup, run the bucket setup logic.
-    # This happens after the event loop starts but before we accept requests.
+    # On startup, run the bucket setup logic and seed the database.
     try:
         minioStorage.setup_buckets()
         logger.info("MinIO buckets and policies configured.")
+        
+        # Seed the database with initial appointments
+        db_session = next(mysql.get_db())
+        appointment_repo = AppointmentRepo(db=db_session)
+        appointment_service = AppointmentService(repo=appointment_repo)
+        appointment_service.seed_appointments()
+        logger.info("Database seeded with initial appointments.")
+
     except Exception as e:
-        logger.error(f"Failed to setup MinIO buckets: {str(e)}")
+        logger.error(f"Failed during application startup: {str(e)}")
         raise
+    finally:
+        db_session.close()
+        
     yield
     # Code to run on shutdown could go here if needed.
 
@@ -70,6 +83,7 @@ def create_application() -> FastAPI:
         return response
     
     app.include_router(file.router)
+    app.include_router(appointment.router)
     ExceptionHandler(app)
     return app
 

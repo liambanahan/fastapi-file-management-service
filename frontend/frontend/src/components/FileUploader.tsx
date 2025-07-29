@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, ChangeEvent, useRef } from 'react';
+import { FileData } from '../types';
 
 // Define the structure of the API responses
 interface UploadInitResponse {
@@ -10,26 +11,34 @@ interface UploadInitResponse {
   };
 }
 
+interface SuccessResponse<T> {
+  data: T;
+  success: boolean;
+  message?: string;
+}
+
 interface UploadCompleteResponse {
-  data: {
-    id: string;
-    path: string;
-    download_url: string;
-  };
+  id: string;
+  path: string;
+  download_url: string;
+  filename: string;
+  content_type: string;
+  size: number;
 }
 
 interface FileUploaderProps {
-  appointment: string;
-  onUploadSuccess: (newFile: UploadCompleteResponse['data']) => void;
+  appointmentId: string;
+  onUploadSuccess: (newFile: FileData) => void;
+  onUploadComplete: () => void;
 }
 
 const API_BASE_URL = 'http://localhost:8000/api/v1/file';
 
-export default function FileUploader({ appointment, onUploadSuccess }: FileUploaderProps) {
+export default function FileUploader({ appointmentId, onUploadSuccess, onUploadComplete }: FileUploaderProps) {
   const [file, setFile] = useState<File | null>(null);
   const [progress, setProgress] = useState(0);
-  const [status, setStatus] = useState('Please select a file to upload.');
-  const [uploadedFile, setUploadedFile] = useState<UploadCompleteResponse['data'] | null>(null);
+  const [status, setStatus] = useState('Click or drag to select a file');
+  const [uploadedFile, setUploadedFile] = useState<FileData | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -97,7 +106,8 @@ export default function FileUploader({ appointment, onUploadSuccess }: FileUploa
       completeFormData.append('total_size', file.size.toString());
       completeFormData.append('file_extension', fileExtension);
       completeFormData.append('content_type', file.type);
-      completeFormData.append('appointment', appointment); // Add this line
+      completeFormData.append('appointment_id', appointmentId);
+      completeFormData.append('filename', file.name);
       
       const completeResponse = await fetch(`${API_BASE_URL}/upload/complete/`, {
         method: 'POST',
@@ -106,10 +116,20 @@ export default function FileUploader({ appointment, onUploadSuccess }: FileUploa
 
       if (!completeResponse.ok) throw new Error('Failed to complete upload.');
 
-      const completeJson: UploadCompleteResponse = await completeResponse.json();
-      setUploadedFile(completeJson.data);
+      const completeJson: SuccessResponse<UploadCompleteResponse> = await completeResponse.json();
+      
+      const newFileData: FileData = {
+          id: completeJson.data.id,
+          filename: completeJson.data.filename,
+          content_type: completeJson.data.content_type,
+          size: completeJson.data.size,
+          download_url: completeJson.data.download_url
+      };
+
+      setUploadedFile(newFileData);
       setStatus('Upload successful! Your file is being processed.');
-      onUploadSuccess(completeJson.data); // Call the callback with the new file data
+      onUploadSuccess(newFileData);
+      onUploadComplete();
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
@@ -123,7 +143,7 @@ export default function FileUploader({ appointment, onUploadSuccess }: FileUploa
   const triggerFileSelect = () => fileInputRef.current?.click();
 
   return (
-    <div className="bg-white p-8 rounded-lg shadow-md border border-gray-200">
+    <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
       <input
         type="file"
         ref={fileInputRef}
@@ -133,24 +153,24 @@ export default function FileUploader({ appointment, onUploadSuccess }: FileUploa
       />
 
       <div 
-        className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-blue-500 transition-colors"
+        className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center cursor-pointer hover:border-blue-500 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
         onClick={triggerFileSelect}
       >
-        <p className="text-gray-500">{status}</p>
+        <p className="text-gray-500 dark:text-gray-400">{status}</p>
       </div>
 
       <div className="mt-6">
         <button
           onClick={handleUpload}
           disabled={!file || isUploading}
-          className="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+          className="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all duration-200 ease-in-out"
         >
-          {isUploading ? 'Uploading...' : 'Upload File'}
+          {isUploading ? `Uploading... ${progress}%` : 'Upload File'}
         </button>
       </div>
 
       {isUploading && (
-        <div className="mt-4 w-full bg-gray-200 rounded-full h-2.5">
+        <div className="mt-4 w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
           <div
             className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
             style={{ width: `${progress}%` }}
@@ -159,14 +179,14 @@ export default function FileUploader({ appointment, onUploadSuccess }: FileUploa
       )}
 
       {uploadedFile && (
-        <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg text-center">
-          <p className="font-semibold text-green-800">Processing Complete!</p>
-          <p className="text-sm text-gray-600 mt-1">File ID: {uploadedFile.id}</p>
+        <div className="mt-6 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg text-center">
+          <p className="font-semibold text-green-800 dark:text-green-300">Processing Complete!</p>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">File: {uploadedFile.filename}</p>
           <a
             href={uploadedFile.download_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-2 inline-block text-blue-600 hover:underline"
+            className="mt-2 inline-block text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300 font-semibold"
           >
             Download File
           </a>

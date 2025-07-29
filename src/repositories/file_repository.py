@@ -15,14 +15,22 @@ class FileRepo(BaseRepo[File]):
     def create_file(self, file: FileBaseDTO) -> File:
         db_file = File(
             upload_id=file.upload_id,
-            path=file.path, credential=file.credential, content_type=file.content_type,
-            size=file.size, detail=file.detail, celery_task_id=file.celery_task_id,
-            appointment=file.appointment
+            path=file.path,
+            credential=file.credential,
+            content_type=file.content_type,
+            size=file.size,
+            detail=file.detail,
+            celery_task_id=file.celery_task_id,
+            appointment_id=file.appointment_id,
+            filename=file.filename
         )
         return self.create(db_file)
 
-    def get_files_by_appointment(self, appointment: str) -> list[File]:
-        return self.db.query(self.model).filter(self.model.appointment == appointment).all()
+    def get_files_by_appointment(self, appointment_id: str) -> list[File]:
+        return self.db.query(self.model).filter(self.model.appointment_id == appointment_id).all()
+
+    def list_all_files(self) -> list[File]:
+        return self.db.query(self.model).all()
 
     def delete_file(self, file_id: str):
         file_to_delete = self.get(id=file_id)

@@ -15,8 +15,10 @@ class UploadChunkResponse(BaseModel):
 
 class FileResponse(BaseModel):
     id: str
+    filename: str
     path: str
     content_type: str
+    size: int
     detail:  Optional[Dict[str, Any]]
     credential:  Optional[Dict[str, Any]]
     download_url: str

@@ -84,7 +84,8 @@ class FileService(BaseService[FileRepo]):
                 size=payload.total_size,
                 credential=payload.credential,
                 celery_task_id=celery_task.id,
-                appointment=payload.appointment
+                appointment_id=payload.appointment_id,
+                filename=payload.filename
             )
             logger.info(f"Creating file record with DTO: {file_dto}")
 
@@ -112,9 +113,12 @@ class FileService(BaseService[FileRepo]):
             return minioStorage.get_presigned_url("GET", bucket_name=bucket_name, object_name=filename, extra_query_params=file.credential)
 
 
-    async def get_files_by_appointment(self, appointment: str) -> list[File]:
+    async def get_files_by_appointment(self, appointment_id: str) -> list[File]:
         # In a real app, you'd validate the appointment name here
-        return self.repo.get_files_by_appointment(appointment)
+        return self.repo.get_files_by_appointment(appointment_id)
+
+    async def list_all_files(self) -> list[File]:
+        return self.repo.list_all_files()
 
     async def delete_file(self, file_id: str):
         # Here you might want to delete the file from MinIO as well
@@ -145,9 +149,12 @@ class FileService(BaseService[FileRepo]):
             args=meta['args'], kwargs=meta['kwargs'], task_id=file.celery_task_id)
         return file
 
-    async def get_files_by_appointment(self, appointment: str) -> list[File]:
+    async def get_files_by_appointment(self, appointment_id: str) -> list[File]:
         # In a real app, you'd validate the appointment name here
-        return self.repo.get_files_by_appointment(appointment)
+        return self.repo.get_files_by_appointment(appointment_id)
+
+    async def list_all_files(self) -> list[File]:
+        return self.repo.list_all_files()
 
     async def delete_file(self, file_id: str):
         # Here you might want to delete the file from MinIO as well
