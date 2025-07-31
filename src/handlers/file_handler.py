@@ -128,12 +128,13 @@ class FileHandler(BaseHandler[FileService]):
         return self.response.success(content=SuccessResponse[list[FileResponseDTO]](data=files_response))
 
     async def list_all_files(self) -> JSONResponse:
-        files = await self.service.list_all_files()
+        file_tuples = await self.service.list_all_files()
         files_response = []
-        for file in files:
+        for file, appointment_name in file_tuples:
             download_url = await self.service.get_download_link(file)
             file_resp = FileResponseDTO.from_orm(file)
             file_resp.download_url = download_url
+            file_resp.appointment_name = appointment_name
             files_response.append(file_resp)
         return self.response.success(content=SuccessResponse[list[FileResponseDTO]](data=files_response))
 

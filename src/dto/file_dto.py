@@ -38,6 +38,7 @@ class FileResponseDTO(BaseModel):
     content_type: str
     size: int
     download_url: Optional[str] = None
+    appointment_name: Optional[str] = None
 
     class Config:
         from_attributes = True

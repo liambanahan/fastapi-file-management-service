@@ -130,8 +130,15 @@ export default function Home() {
               {allFiles.length > 0 ? (
                 allFiles.map((file) => (
                   <div key={file.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
-                    <span className="font-medium truncate text-gray-700 dark:text-gray-300" title={file.filename}>{file.filename}</span>
-                    <a href={file.download_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300 font-semibold text-sm transition-colors">
+                    <div className="flex flex-col min-w-0 flex-1">
+                      <span className="font-medium truncate text-gray-700 dark:text-gray-300" title={file.filename}>{file.filename}</span>
+                      {file.appointment_name && (
+                        <span className="text-sm text-gray-500 dark:text-gray-400 truncate" title={`From appointment: ${file.appointment_name}`}>
+                          From: {file.appointment_name}
+                        </span>
+                      )}
+                    </div>
+                    <a href={file.download_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300 font-semibold text-sm transition-colors ml-3">
                       Download
                     </a>
                   </div>

@@ -7,7 +7,7 @@ class AppointmentService(BaseService[AppointmentRepo]):
     def __init__(self, repo: AppointmentRepo):
         super().__init__(repo)
 
-    def seed_appointments(self):
+    def seed_appointments(self): #this code is no longer in use reactivate in main.py for hardcode appt as needed
         hardcoded_appointments = ["subash", "appointment2", "appointment3"]
         for name in hardcoded_appointments:
             existing = self.repo.get_appointment_by_name(name)

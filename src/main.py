@@ -38,7 +38,7 @@ async def lifespan(app: FastAPI):
         db_session = next(mysql.get_db())
         appointment_repo = AppointmentRepo(db=db_session)
         appointment_service = AppointmentService(repo=appointment_repo)
-        appointment_service.seed_appointments()
+        #appointment_service.seed_appointments() no longer in use - for hardcoded appts
         logger.info("Database seeded with initial appointments.")
 
     except Exception as e:

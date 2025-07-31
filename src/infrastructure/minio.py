@@ -132,5 +132,14 @@ class MinioStorage:
     def get_url(self, bucket_name, object_name):
         return f"{config.MINIO_URL}/{bucket_name}/{object_name}"
 
+    def remove_object(self, bucket_name, object_name):
+        """
+        Remove an object from a bucket.
+
+        :param bucket_name: Name of the bucket.
+        :param object_name: Object name in the bucket.
+        """
+        return self.client.remove_object(bucket_name, object_name)
+
 
 minioStorage = MinioStorage()

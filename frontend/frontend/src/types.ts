@@ -11,4 +11,5 @@ export interface FileData {
   content_type: string;
   size: number;
   download_url: string;
+  appointment_name?: string;
 } 

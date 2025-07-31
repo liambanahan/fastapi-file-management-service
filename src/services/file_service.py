@@ -117,13 +117,26 @@ class FileService(BaseService[FileRepo]):
         # In a real app, you'd validate the appointment name here
         return self.repo.get_files_by_appointment(appointment_id)
 
-    async def list_all_files(self) -> list[File]:
+    async def list_all_files(self) -> list[tuple]:
         return self.repo.list_all_files()
 
     async def delete_file(self, file_id: str):
-        # Here you might want to delete the file from MinIO as well
-        # For simplicity, we are just deleting the DB record.
-        return self.repo.delete_file(file_id)
+        # First get the file record to extract MinIO path info
+        file = self.repo.get_file(file_id)
+        if file:
+            # Delete from MinIO
+            try:
+                bucket_name = file.path.split("/")[0]
+                object_name = "/".join(file.path.split("/")[1:])
+                minioStorage.remove_object(bucket_name, object_name)
+                logger.info(f"Deleted file from MinIO: {bucket_name}/{object_name}")
+            except Exception as e:
+                logger.error(f"Failed to delete file from MinIO: {str(e)}")
+                # Continue with DB deletion even if MinIO deletion fails
+            
+            # Delete from database
+            return self.repo.delete_file(file_id)
+        return None
     async def get_file(self, id: id, credential=Dict[str, Any]) -> File:
         file = self.repo.get_file(id=id)
         if file == None:
@@ -148,15 +161,3 @@ class FileService(BaseService[FileRepo]):
         upload_file_task.apply_async(
             args=meta['args'], kwargs=meta['kwargs'], task_id=file.celery_task_id)
         return file
-
-    async def get_files_by_appointment(self, appointment_id: str) -> list[File]:
-        # In a real app, you'd validate the appointment name here
-        return self.repo.get_files_by_appointment(appointment_id)
-
-    async def list_all_files(self) -> list[File]:
-        return self.repo.list_all_files()
-
-    async def delete_file(self, file_id: str):
-        # Here you might want to delete the file from MinIO as well
-        # For simplicity, we are just deleting the DB record.
-        return self.repo.delete_file(file_id)
