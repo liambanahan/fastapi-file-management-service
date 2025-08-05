@@ -334,3 +334,249 @@ for (let i = 0; i < totalChunks; i++) {
 
 This architecture ensures reliable, scalable, and maintainable file upload processing!
 
+---
+
+# 📥 File Download Process - Detailed Flow
+
+## 🎯 Overview
+The file download system provides **secure, efficient access** to stored files with support for both **public** and **private** files. The system generates download URLs dynamically and handles access control through credentials.
+
+## 📊 Complete Download Flow Diagram
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant F as Frontend
+    participant A as API Routes
+    participant H as Handlers
+    participant S as Services
+    participant R as Repository
+    participant D as Database
+    participant M as MinIO
+    participant B as Browser
+
+    Note over U,B: User clicks download link
+    U->>F: Click Download Link
+    Note over F: Frontend already has download_url from previous API calls
+    F->>B: Navigate to download_url
+    
+    alt Public File (Direct MinIO URL)
+        B->>M: GET /public-bucket/filename
+        M-->>B: File Stream (Direct Download)
+    else Private File (Presigned URL)
+        B->>M: GET /private-bucket/filename?credentials
+        M->>M: Validate presigned URL & credentials
+        M-->>B: File Stream (Secure Download)
+    end
+    
+    Note over U,B: Optional: Explicit file retrieval via API
+    U->>F: Request File Info
+    F->>A: GET /api/v1/file/get/{file_id}
+    A->>H: get_file(file_id, credentials)
+    H->>S: get_file(file_id, credentials)
+    S->>R: get_file(file_id)
+    R->>D: SELECT * FROM files WHERE id = file_id
+    D-->>R: File Entity
+    R-->>S: File Entity
+    S->>S: Generate download URL
+    
+    alt Public File URL Generation
+        S->>S: get_url(bucket, filename)
+        Note over S: Returns: http://minio:9000/public-bucket/filename
+    else Private File URL Generation
+        S->>M: get_presigned_url(bucket, filename, credentials)
+        M-->>S: Signed URL with expiration
+        Note over S: Returns: http://minio:9000/private-bucket/filename?X-Amz-Signature=...
+    end
+    
+    S-->>H: File Entity + Download URL
+    H->>H: Transform to FileResponse DTO
+    H-->>A: FileResponse
+    A-->>F: {id, filename, download_url, ...}
+    F-->>U: Display file info with download link
+```
+
+## 🌐 Layer-by-Layer Breakdown
+
+### 1. **Frontend Layer (React/Next.js)**
+**Download Link Interaction:**
+
+#### Direct Download (Most Common)
+```typescript
+// Download links are already available in FileData
+<a href={file.download_url} target="_blank" rel="noopener noreferrer">
+  Download
+</a>
+```
+- **Purpose**: Direct browser navigation to download URL
+- **Behavior**: Opens in new tab, triggers browser download
+- **URL Types**: 
+  - Public: `http://minio:9000/public-bucket/filename`
+  - Private: `http://minio:9000/private-bucket/filename?X-Amz-Signature=...`
+
+#### Explicit File Retrieval (Optional)
+```typescript
+// GET /api/v1/file/get/{file_id}
+const response = await fetch(`${API_BASE_URL}/get/${file_id}`);
+const fileData = await response.json();
+// Use fileData.download_url for download
+```
+- **Purpose**: Get fresh download URL and file metadata
+- **Use Case**: When download URL has expired or file info is needed
+
+### 2. **API Routes Layer (FastAPI)**
+**File Retrieval Endpoint:**
+
+```python
+@router.get('/get/{file_id}', response_model=SuccessResponse[FileResponse])
+async def endpoint(file_id: str, request: Request, file_handler: FileHandler = Depends(get_file_handler)):
+    credential = dict(request.query_params)  # Extract credentials from query params
+    return await file_handler.get_file(file_id=file_id, credential=credential)
+```
+- **Purpose**: Retrieve file metadata and generate fresh download URL
+- **Validation**: File ID format, credential parsing
+- **Security**: Credentials passed via query parameters
+
+### 3. **Handlers Layer (Business Coordination)**
+**File Retrieval Handler:**
+
+```python
+async def get_file(self, file_id: str, credential: Dict[str, Any]) -> JSONResponse:
+    try:
+        file = await self.service.get_file(id=file_id, credential=credential)
+        download_url = await self.service.get_download_link(file)
+        
+        # Transform Entity to Response DTO
+        data = FileResponse(
+            id=file.id, 
+            path=file.path, 
+            credential=file.credential,
+            content_type=file.content_type, 
+            detail=file.detail, 
+            download_url=download_url,
+            filename=file.filename, 
+            size=file.size
+        )
+        return self.response.success(SuccessResponse[FileResponse](data=data))
+    except BaseException as exception:
+        return self.response.error(ErrorResponse(message=exception.message), status=exception.status)
+```
+- **Purpose**: Coordinate file retrieval and URL generation
+- **DTO Transformation**: `File` entity → `FileResponse`
+- **Error Handling**: Service exceptions → HTTP responses
+
+### 4. **Services Layer (Core Business Logic)**
+**Download URL Generation:**
+
+```python
+async def get_download_link(self, file: File) -> str:
+    bucket_name = file.path.split("/")[0]  # Extract bucket from path
+    filename = "/".join(file.path.split("/")[1:])  # Extract filename from path
+    
+    if not file.credential:
+        # Public file - direct URL
+        return minioStorage.get_url(bucket_name=bucket_name, object_name=filename)
+    else:
+        # Private file - presigned URL with credentials
+        for key, value in file.credential.items():
+            if not isinstance(value, str):
+                file.credential[key] = str(value)
+        return minioStorage.get_presigned_url(
+            "GET", 
+            bucket_name=bucket_name, 
+            object_name=filename, 
+            extra_query_params=file.credential
+        )
+```
+- **Purpose**: Generate appropriate download URL based on file security
+- **Business Logic**: 
+  - **Public Files**: Direct MinIO URL (no authentication)
+  - **Private Files**: Presigned URL with credentials and expiration
+- **Security**: Credential validation and URL signing
+
+### 5. **Repository Layer (Data Access)**
+**File Retrieval:**
+
+```python
+def get_file(self, id: str) -> File:
+    return self.get(id=id)  # Inherited from BaseRepo
+```
+- **Purpose**: Retrieve file entity from database
+- **Database Query**: `SELECT * FROM files WHERE id = ?`
+- **Relationships**: Loads related `appointment` and `user` data
+
+### 6. **Database Layer (MySQL Storage)**
+**File Entity Retrieval:**
+- **Query**: Direct lookup by primary key (`id`)
+- **Relationships**: Eager loading of `appointment` and `user` via foreign keys
+- **Data**: Returns complete file metadata including `path`, `credential`, `content_type`, etc.
+
+### 7. **MinIO Storage Layer**
+**URL Generation & File Serving:**
+
+#### Public File URLs
+```python
+def get_url(self, bucket_name, object_name):
+    return f"{config.MINIO_URL}/{bucket_name}/{object_name}"
+    # Returns: http://minio:9000/public-bucket/filename
+```
+- **Purpose**: Generate direct access URL for public files
+- **Security**: No authentication required (bucket policy allows public read)
+- **Performance**: Direct access, no API overhead
+
+#### Private File URLs (Presigned)
+```python
+def get_presigned_url(self, method, bucket_name, object_name, expires=timedelta(days=7), 
+                     extra_query_params=None) -> str:
+    return self.client.get_presigned_url(method, bucket_name, object_name, expires, 
+                                       response_headers, request_date, version_id, extra_query_params)
+    # Returns: http://minio:9000/private-bucket/filename?X-Amz-Signature=...&X-Amz-Expires=...
+```
+- **Purpose**: Generate time-limited, signed URL for private files
+- **Security**: URL contains cryptographic signature, expires after set time
+- **Credentials**: Additional query parameters for access control
+
+## 🔒 Security Models
+
+### **Public Files**
+- **Storage**: `public-bucket` with read policy for all users
+- **Access**: Direct URL access, no authentication
+- **Use Case**: Files that should be publicly accessible
+- **URL Format**: `http://minio:9000/public-bucket/{filename}`
+
+### **Private Files**
+- **Storage**: `private-bucket` with restricted access
+- **Access**: Presigned URLs with expiration and credentials
+- **Use Case**: Sensitive files requiring access control
+- **URL Format**: `http://minio:9000/private-bucket/{filename}?X-Amz-Signature=...`
+
+## 🎯 Download Flow Types
+
+### **Type 1: Direct Download (Common)**
+```
+User Click → Browser Navigation → MinIO → File Stream
+```
+- **Speed**: Fastest (no API calls)
+- **Use Case**: Normal file downloads
+- **Requirement**: Valid download_url already available
+
+### **Type 2: API-Mediated Download (Rare)**
+```
+User Request → API Call → URL Generation → Browser Navigation → MinIO → File Stream
+```
+- **Speed**: Slower (requires API call)
+- **Use Case**: Expired URLs, fresh metadata needed
+- **Requirement**: File ID and appropriate credentials
+
+## 🔑 Key Benefits
+
+- **🚀 Performance**: Direct MinIO access bypasses API for actual download
+- **🔒 Security**: Separate handling for public vs private files
+- **⏰ Time-Limited Access**: Presigned URLs expire automatically
+- **🎯 Flexible Access**: Support for both direct and API-mediated downloads
+- **📊 Scalability**: MinIO handles file serving, API handles metadata
+- **🛡️ Access Control**: Credential-based access for private files
+- **🔄 URL Refresh**: Can generate new URLs when needed
+
+This download architecture provides secure, efficient file access while maintaining clean separation between metadata management and file serving!
+
