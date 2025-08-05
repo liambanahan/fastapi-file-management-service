@@ -1,7 +1,8 @@
 from infrastructure.db.mysql import mysql as db
-from sqlalchemy import Column, String, JSON, Integer, VARCHAR, ForeignKey
+from sqlalchemy import Column, String, JSON, Integer, VARCHAR, ForeignKey, Boolean, DateTime
 from sqlalchemy.orm import relationship
 import uuid
+from datetime import datetime
 
 
 class File(db.Base):
@@ -18,6 +19,13 @@ class File(db.Base):
     size = Column(Integer)
     detail = Column(JSON(none_as_null=True))
     celery_task_id = Column(String(36))
+    
+    # Virus scanning fields
+    virus_scan_status = Column(String(20), default='pending')  # 'pending', 'clean', 'infected', 'error', 'disabled'
+    virus_scan_result = Column(JSON(none_as_null=True))        # Full scan results
+    virus_scan_date = Column(DateTime)                         # When scan was performed
+    is_quarantined = Column(Boolean, default=False)           # If file is quarantined
+    quarantine_reason = Column(String(500))                   # Why file was quarantined
 
     # Relationships
     appointment = relationship("Appointment", back_populates="files")

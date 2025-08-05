@@ -22,6 +22,11 @@ class FileResponse(BaseModel):
     detail:  Optional[Dict[str, Any]]
     credential:  Optional[Dict[str, Any]]
     download_url: str
+    
+    # Virus scanning fields
+    virus_scan_status: str = 'pending'
+    is_quarantined: bool = False
+    quarantine_reason: Optional[str] = None
 
 
 class UploadStatusResponse(BaseModel):

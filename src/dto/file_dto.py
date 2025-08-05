@@ -2,6 +2,7 @@ from pydantic import BaseModel
 from typing import Any, Dict, Optional
 from fastapi import UploadFile
 from constants.file_extensions import FileExtension
+from datetime import datetime
 
 class UploadChunkDTO(BaseModel):
     chunk_size: int
@@ -33,6 +34,13 @@ class FileBaseDTO(BaseModel):
     appointment_id: str
     user_id: str
     filename: str
+    
+    # Virus scanning fields
+    virus_scan_status: str = 'pending'
+    virus_scan_result: Optional[Dict[str, Any]] = None
+    virus_scan_date: Optional[datetime] = None
+    is_quarantined: bool = False
+    quarantine_reason: Optional[str] = None
 
 class FileResponseDTO(BaseModel):
     id: str
@@ -41,6 +49,11 @@ class FileResponseDTO(BaseModel):
     size: int
     download_url: Optional[str] = None
     appointment_name: Optional[str] = None
+    
+    # Virus scanning fields
+    virus_scan_status: str = 'pending'
+    is_quarantined: bool = False
+    quarantine_reason: Optional[str] = None
 
     class Config:
         from_attributes = True

@@ -24,7 +24,12 @@ class FileRepo(BaseRepo[File]):
             celery_task_id=file.celery_task_id,
             appointment_id=file.appointment_id,
             user_id=file.user_id,
-            filename=file.filename
+            filename=file.filename,
+            virus_scan_status=file.virus_scan_status,
+            virus_scan_result=file.virus_scan_result,
+            virus_scan_date=file.virus_scan_date,
+            is_quarantined=file.is_quarantined,
+            quarantine_reason=file.quarantine_reason
         )
         return self.create(db_file)
 

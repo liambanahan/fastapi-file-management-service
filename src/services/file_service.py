@@ -10,14 +10,17 @@ from infrastructure.minio import minioStorage
 from dto.file_dto import FileBaseDTO
 from services.base_service import BaseService
 from exceptions.http_exception import PermissionException, FileNotFoundException, FileUploadedException, FilePendingUploadException
+from exceptions.virus_exception import VirusDetectedException, VirusScanException
 from tasks.file_upload_task import upload_file_task
 import uuid
 from core.config import config
 from celery.result import AsyncResult
 from tasks import celery
 from constants.upload_stauts import UploadStatus
+from infrastructure.virus_scanner import virus_scanner
 import logging
 import traceback
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -45,11 +48,36 @@ class FileService(BaseService[FileRepo]):
                     body={"file": "invalid_size"})
             await chunk_file.write(content)
 
+    async def _assemble_chunks_for_scanning(self, upload_path: str, total_chunks: int) -> str:
+        """Assemble chunks into a single file for virus scanning"""
+        assembled_file_path = os.path.join(upload_path, "assembled_for_scan")
+        
+        try:
+            with open(assembled_file_path, "wb") as assembled_file:
+                for i in range(total_chunks):
+                    chunk_path = os.path.join(upload_path, f"{i}.part")
+                    if not os.path.exists(chunk_path):
+                        raise FileNotFoundError(f"Missing chunk {i} for upload")
+                    
+                    with open(chunk_path, "rb") as chunk_file:
+                        assembled_file.write(chunk_file.read())
+            
+            logger.info(f"Assembled {total_chunks} chunks into {assembled_file_path}")
+            return assembled_file_path
+            
+        except Exception as e:
+            logger.error(f"Failed to assemble chunks: {str(e)}")
+            # Clean up partial file if it exists
+            if os.path.exists(assembled_file_path):
+                os.remove(assembled_file_path)
+            raise
+
     async def upload_complete(self, payload: UploadFileDTO) -> File:
+        assembled_file_path = None
         try:
             logger.info(f"Starting upload_complete for upload_id: {payload.upload_id}")
 
-            # First, check if a file record with this upload_id already exists
+            # First, check if a file record with this upload_id already exists (idempotency)
             existing_file = self.repo.db.query(File).filter(File.upload_id == payload.upload_id).first()
             if existing_file:
                 logger.warning(f"File with upload_id {payload.upload_id} already exists. Returning existing file record.")
@@ -61,6 +89,76 @@ class FileService(BaseService[FileRepo]):
                 logger.error(f"Upload directory not found: {upload_path}")
                 raise FileNotFoundError(f"Upload directory not found for upload_id: {payload.upload_id}")
 
+            # Assemble chunks for virus scanning
+            assembled_file_path = await self._assemble_chunks_for_scanning(upload_path, payload.total_chunks)
+            
+            # VIRUS SCAN - Scan the assembled file
+            scan_result = await virus_scanner.scan_file(assembled_file_path)
+            logger.info(f"Virus scan result for {payload.upload_id}: {scan_result}")
+            
+            # Initialize virus scan fields
+            virus_scan_status = 'clean'
+            virus_scan_date = datetime.utcnow()
+            is_quarantined = False
+            quarantine_reason = None
+            
+            # Check if file is infected
+            if scan_result.get('is_infected'):
+                virus_scan_status = 'infected'
+                is_quarantined = config.QUARANTINE_INFECTED_FILES
+                quarantine_reason = f"Virus detected: {scan_result.get('virus_name', 'Unknown threat')}"
+                
+                logger.error(f"VIRUS DETECTED in upload {payload.upload_id}: {scan_result.get('virus_name')}")
+                
+                # Clean up assembled file immediately
+                if assembled_file_path and os.path.exists(assembled_file_path):
+                    os.remove(assembled_file_path)
+                    assembled_file_path = None
+                
+                # Create quarantined file record
+                file_dto = FileBaseDTO(
+                    upload_id=payload.upload_id,
+                    path="QUARANTINED" if config.QUARANTINE_INFECTED_FILES else "DELETED",
+                    content_type=payload.content_type,
+                    size=payload.total_size,
+                    appointment_id=payload.appointment_id,
+                    user_id=payload.user_id,
+                    filename=payload.filename,
+                    credential=payload.credential,
+                    detail=payload.detail,
+                    celery_task_id="",  # No Celery task for infected files
+                    virus_scan_status=virus_scan_status,
+                    virus_scan_result=scan_result,
+                    virus_scan_date=virus_scan_date,
+                    is_quarantined=is_quarantined,
+                    quarantine_reason=quarantine_reason
+                )
+                
+                file = self.repo.create_file(file_dto)
+                
+                # Raise exception to prevent further processing
+                raise VirusDetectedException(
+                    message=quarantine_reason,
+                    virus_name=scan_result.get('virus_name'),
+                    scan_result=scan_result
+                )
+            
+            elif scan_result.get('scan_result') == 'SCAN_ERROR':
+                # Handle scan errors
+                virus_scan_status = 'error'
+                quarantine_reason = f"Scan failed: {scan_result.get('error', 'Unknown error')}"
+                logger.warning(f"Virus scan failed for {payload.upload_id}: {quarantine_reason}")
+                
+                # Depending on configuration, we might want to quarantine or allow
+                if config.QUARANTINE_INFECTED_FILES:  # Use same setting for scan errors
+                    is_quarantined = True
+                    logger.warning(f"Quarantining file due to scan error: {payload.upload_id}")
+            
+            elif scan_result.get('scan_result') == 'SCAN_DISABLED':
+                virus_scan_status = 'disabled'
+                logger.info(f"Virus scanning disabled for {payload.upload_id}")
+            
+            # File is clean or scan was disabled - proceed with normal upload
             # Determine bucket
             if not payload.credential:
                 bucket = minioStorage.public_bucket
@@ -70,30 +168,42 @@ class FileService(BaseService[FileRepo]):
             filename = f"{payload.upload_id}.{payload.file_extension.value}"
             logger.info(f"Creating Celery task for bucket: {bucket}, filename: {filename}")
 
-            # Create Celery task
-            celery_task = upload_file_task.delay(bucket=bucket, upload_id=payload.upload_id,
-                                                 total_chunks=payload.total_chunks, filename=filename)
-            logger.info(f"Celery task created with ID: {celery_task.id}")
+            # Create Celery task (only if not quarantined)
+            celery_task_id = ""
+            if not is_quarantined:
+                celery_task = upload_file_task.delay(bucket=bucket, upload_id=payload.upload_id,
+                                                     total_chunks=payload.total_chunks, filename=filename)
+                celery_task_id = celery_task.id
+                logger.info(f"Celery task created with ID: {celery_task.id}")
 
-            # Create file record in database
+            # Create file record in database with scan results
             file_dto = FileBaseDTO(
                 upload_id=payload.upload_id,
-                path=bucket + "/" + filename,
+                path=f"{bucket}/{filename}" if not is_quarantined else "QUARANTINED",
                 content_type=payload.content_type,
                 detail=payload.detail,
                 size=payload.total_size,
                 credential=payload.credential,
-                celery_task_id=celery_task.id,
+                celery_task_id=celery_task_id,
                 appointment_id=payload.appointment_id,
                 user_id=payload.user_id,
-                filename=payload.filename
+                filename=payload.filename,
+                virus_scan_status=virus_scan_status,
+                virus_scan_result=scan_result,
+                virus_scan_date=virus_scan_date,
+                is_quarantined=is_quarantined,
+                quarantine_reason=quarantine_reason
             )
             logger.info(f"Creating file record with DTO: {file_dto}")
 
             file = self.repo.create_file(file_dto)
             logger.info(f"File record created successfully with ID: {file.id}")
+            
             return file
 
+        except VirusDetectedException:
+            # Re-raise virus exceptions
+            raise
         except FileNotFoundError:
             # Re-raise FileNotFoundError as is
             raise
@@ -101,6 +211,14 @@ class FileService(BaseService[FileRepo]):
             logger.error(f"Error in upload_complete: {str(e)}\n{traceback.format_exc()}")
             # Re-raise the original exception so it can be handled by the handler
             raise
+        finally:
+            # Clean up assembled file if it still exists
+            if assembled_file_path and os.path.exists(assembled_file_path):
+                try:
+                    os.remove(assembled_file_path)
+                    logger.info(f"Cleaned up assembled file: {assembled_file_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to clean up assembled file {assembled_file_path}: {str(e)}")
 
     async def get_download_link(self, file: File) -> str:
         bucket_name = file.path.split("/")[0]

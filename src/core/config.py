@@ -25,6 +25,12 @@ class Config:
     MYSQL_DATABASE = os.getenv("MYSQL_DATABASE", "filemanager")
     MYSQL_TEST_DATABASE = os.getenv("MYSQL_TEST_DATABASE", "filemanager_test")
 
+    CLAMAV_REST_URL = os.getenv("CLAMAV_REST_URL", "http://clamav-rest:3000")
+    VIRUS_SCAN_ENABLED = os.getenv("VIRUS_SCAN_ENABLED", "true").lower() == "true"
+    QUARANTINE_INFECTED_FILES = os.getenv("QUARANTINE_INFECTED_FILES", "true").lower() == "true"
+    DELETE_INFECTED_FILES = os.getenv("DELETE_INFECTED_FILES", "false").lower() == "true"
+    MAX_SCAN_FILE_SIZE = int(os.getenv("MAX_SCAN_FILE_SIZE", str(100 * 1024 * 1024)))  # 100MB default
+
     @property
     def MYSQL_DATABASE_URL(self):
         if self.ENV == "testing":

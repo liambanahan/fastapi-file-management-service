@@ -7,6 +7,7 @@ from handlers.base_handler import BaseHandler
 from api.responses.response import SuccessResponse, ErrorResponse
 from fastapi.responses import JSONResponse
 from exceptions.http_exception import BaseException
+from exceptions.virus_exception import VirusDetectedException, VirusScanException
 from constants.file_extensions import FileExtension
 from constants.errors import Errors
 from typing import Dict, Any
@@ -15,6 +16,8 @@ from utils import parse_json_to_dict
 import logging
 import traceback
 from dto.file_dto import FileResponseDTO
+from infrastructure.virus_scanner import virus_scanner
+from api.responses.quarantine_response import VirusScanHealthResponse
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -70,11 +73,39 @@ class FileHandler(BaseHandler[FileService]):
             logger.info(f"File created successfully: {file.id}")
             
             download_url = await self.service.get_download_link(file)
-            data = FileResponse(id=file.id, path=file.path, credential=file.credential,
-                                content_type=file.content_type, detail=file.detail, download_url=download_url,
-                                filename=file.filename, size=file.size)
+            data = FileResponse(
+                id=file.id, 
+                path=file.path, 
+                credential=file.credential,
+                content_type=file.content_type, 
+                detail=file.detail, 
+                download_url=download_url,
+                filename=file.filename, 
+                size=file.size,
+                virus_scan_status=file.virus_scan_status,
+                is_quarantined=file.is_quarantined,
+                quarantine_reason=file.quarantine_reason
+            )
             return self.response.success(content=SuccessResponse[FileResponse](data=data))
             
+        except VirusDetectedException as exc:
+            logger.error(f"Virus detected during upload: {str(exc)}")
+            return self.response.error(
+                ErrorResponse(
+                    message=f"File rejected: {exc.message}",
+                    errors=[f"Virus detected: {exc.virus_name}" if exc.virus_name else "Malware detected"]
+                ),
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY
+            )
+        except VirusScanException as exc:
+            logger.error(f"Virus scan failed during upload: {str(exc)}")
+            return self.response.error(
+                ErrorResponse(
+                    message=f"Upload failed: {exc.message}",
+                    errors=["Virus scanning failed"]
+                ),
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
         except FileNotFoundError as exc:
             logger.error(f"File not found error in upload_complete: {str(exc)}")
             return self.response.error(ErrorResponse(message=Errors.FILE_NOT_FOUND), status=status.HTTP_422_UNPROCESSABLE_ENTITY)
@@ -87,9 +118,19 @@ class FileHandler(BaseHandler[FileService]):
         try:
             file = await self.service.get_file(id=file_id, credential=credential)
             download_url = await self.service.get_download_link(file)
-            data = FileResponse(id=file.id, path=file.path, credential=file.credential,
-                                content_type=file.content_type, detail=file.detail, download_url=download_url,
-                                filename=file.filename, size=file.size)
+            data = FileResponse(
+                id=file.id, 
+                path=file.path, 
+                credential=file.credential,
+                content_type=file.content_type, 
+                detail=file.detail, 
+                download_url=download_url,
+                filename=file.filename, 
+                size=file.size,
+                virus_scan_status=file.virus_scan_status,
+                is_quarantined=file.is_quarantined,
+                quarantine_reason=file.quarantine_reason
+            )
             return self.response.success(SuccessResponse[FileResponse](data=data))
         except BaseException as exception:
             return self.response.error(ErrorResponse(message=exception.message), status=exception.status)
@@ -110,9 +151,19 @@ class FileHandler(BaseHandler[FileService]):
         try:
             file = await self.service.retry_upload(payload=payload)
             download_url = await self.service.get_download_link(file)
-            data = FileResponse(id=file.id, path=file.path, credential=file.credential,
-                                content_type=file.content_type, detail=file.detail, download_url=download_url,
-                                filename=file.filename, size=file.size)
+            data = FileResponse(
+                id=file.id, 
+                path=file.path, 
+                credential=file.credential,
+                content_type=file.content_type, 
+                detail=file.detail, 
+                download_url=download_url,
+                filename=file.filename, 
+                size=file.size,
+                virus_scan_status=file.virus_scan_status,
+                is_quarantined=file.is_quarantined,
+                quarantine_reason=file.quarantine_reason
+            )
             return self.response.success(content=SuccessResponse[FileResponse](data=data))
         except BaseException as exception:
             return self.response.error(ErrorResponse(message=exception.message), status=exception.status)
@@ -143,3 +194,31 @@ class FileHandler(BaseHandler[FileService]):
         if not deleted_file:
             return self.response.error(ErrorResponse(message="File not found"), status=status.HTTP_404_NOT_FOUND)
         return self.response.success(content=SuccessResponse(message="File deleted successfully."))
+
+    async def virus_scanner_health(self) -> JSONResponse:
+        """Check the health status of the virus scanner"""
+        try:
+            health_status = await virus_scanner.health_check()
+            
+            response_data = VirusScanHealthResponse(
+                status=health_status['status'],
+                message=health_status['message'],
+                scanner='ClamAV',
+                enabled=config.VIRUS_SCAN_ENABLED
+            )
+            
+            # Return appropriate HTTP status based on health
+            if health_status['status'] == 'healthy':
+                return self.response.success(content=SuccessResponse[VirusScanHealthResponse](data=response_data))
+            else:
+                return self.response.error(
+                    ErrorResponse(message=f"Virus scanner unhealthy: {health_status['message']}"),
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE
+                )
+                
+        except Exception as e:
+            logger.error(f"Error checking virus scanner health: {str(e)}")
+            return self.response.error(
+                ErrorResponse(message="Failed to check virus scanner health"),
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

@@ -12,6 +12,7 @@ from core.config import config
 from constants.file_extensions import FileExtension
 from infrastructure.db.mysql import mysql
 from dto.file_dto import FileResponseDTO
+from api.responses.quarantine_response import VirusScanHealthResponse
 
 
 router = APIRouter(
@@ -98,3 +99,12 @@ async def endpoint(file_id: str, request: Request, file_handler: FileHandler = D
 })
 async def endpoint(file_id: str = Form(...), credential: Optional[str] = Form(None), file_handler: FileHandler = Depends(get_file_handler)) -> JSONResponse:
     return await file_handler.retry_upload(file_id=file_id, credential=credential)
+
+
+@router.get('/virus-scanner/health', response_model=SuccessResponse[VirusScanHealthResponse], responses={
+    503: {"model": ErrorResponse},
+    500: {"model": ErrorResponse}
+})
+async def virus_scanner_health(file_handler: FileHandler = Depends(get_file_handler)) -> JSONResponse:
+    """Check the health status of the virus scanner service"""
+    return await file_handler.virus_scanner_health()
