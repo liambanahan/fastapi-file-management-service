@@ -195,3 +195,142 @@ graph TD
 - Entity models with SQLAlchemy
 - Foreign key relationships and constraints
 
+---
+
+# 📄 File Upload Process - Detailed Flow
+
+## 🎯 Overview
+The file management system uses a **chunked upload strategy** with background processing to handle large files efficiently. Here's the complete flow through all architectural layers:
+
+## 📊 Complete Upload Flow Diagram
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant F as Frontend
+    participant A as API Routes
+    participant H as Handlers
+    participant S as Services
+    participant R as Repository
+    participant D as Database
+    participant C as Celery
+    participant M as MinIO
+
+    U->>F: Select & Upload File
+    F->>A: POST /upload/init/
+    A->>H: upload_initialize()
+    H->>S: upload_initialize()
+    S-->>H: upload_id
+    H-->>A: UploadInitResponse
+    A-->>F: {upload_id, chunk_size}
+    
+    loop For each chunk
+        F->>A: POST /upload/chunk/
+        A->>H: upload_chunk()
+        H->>S: upload_chunk(UploadChunkDTO)
+        S-->>H: Success
+        H-->>A: UploadChunkResponse
+        A-->>F: Chunk uploaded
+    end
+    
+    F->>A: POST /upload/complete/
+    A->>H: upload_complete()
+    H->>S: upload_complete(UploadFileDTO)
+    S->>C: Create background task
+    S->>R: create_file(FileBaseDTO)
+    R->>D: INSERT file record
+    D-->>R: File entity
+    R-->>S: File entity
+    S-->>H: File entity
+    H-->>A: FileResponse
+    A-->>F: {file_id, download_url}
+    
+    C->>C: Assemble chunks
+    C->>M: Upload final file
+    C->>C: Cleanup temp files
+```
+
+## 🌐 Layer-by-Layer Breakdown
+
+### 1. **Frontend Layer (React/Next.js)**
+**Three-Phase Upload Process:**
+
+#### Phase 1: Upload Initialization
+```typescript
+// POST /api/v1/file/upload/init/
+const initResponse = await fetch(`${API_BASE_URL}/upload/init/`, { method: 'POST' });
+const { chunk_size, upload_id } = initResponse.data;
+```
+- **Purpose**: Get upload configuration and unique upload ID
+- **Data Received**: `chunk_size`, `upload_id`
+
+#### Phase 2: Chunked Upload
+```typescript
+const totalChunks = Math.ceil(file.size / chunk_size);
+for (let i = 0; i < totalChunks; i++) {
+  const chunk = file.slice(start, end);
+  // POST /api/v1/file/upload/chunk/ for each chunk
+}
+```
+- **Purpose**: Upload file in small chunks for large file handling
+- **Progress Tracking**: Updates progress bar after each chunk
+
+#### Phase 3: Upload Completion
+```typescript
+// POST /api/v1/file/upload/complete/
+// Sends: upload metadata, appointment/user associations, file details
+// Receives: File record with download URL
+```
+
+### 2. **API Routes Layer (FastAPI)**
+**Route Definitions & Validation:**
+- **`/upload/init/`**: Initialize upload session
+- **`/upload/chunk/`**: Validate and receive chunks (size ≤ max chunk size)
+- **`/upload/complete/`**: Finalize upload with comprehensive validation
+
+### 3. **Handlers Layer (Business Coordination)**
+**DTO Transformations:**
+- **Input**: Form data → `UploadChunkDTO`, `UploadFileDTO`
+- **Output**: `File` entity → `FileResponse`
+- **Error Handling**: Service exceptions → HTTP status codes
+
+### 4. **Services Layer (Core Business Logic)**
+**Key Operations:**
+- **Upload Initialize**: Create UUID, temporary directory
+- **Upload Chunk**: Async file I/O, chunk validation
+- **Upload Complete**: 
+  - ✅ **Idempotency check** (prevents duplicates)
+  - 🔒 **Security**: Public vs private bucket determination
+  - ⚡ **Background Processing**: Celery task creation
+
+### 5. **Repository Layer (Data Access)**
+**Database Operations:**
+- **DTO → Entity Conversion**: `FileBaseDTO` → `File` entity
+- **Relationships**: Links to `appointments` and `users` tables
+- **Transaction Management**: Commit/rollback handling
+
+### 6. **Database Layer (MySQL Storage)**
+**File Entity Structure:**
+- 🟡 **Primary Key**: `id` (UUID)
+- 🟢 **Unique Index**: `upload_id` (prevents duplicates)
+- 🔴 **Foreign Keys**: `appointment_id`, `user_id`
+- **JSON Columns**: `credential`, `detail` (flexible metadata)
+
+### 7. **Background Processing (Celery Task)**
+**Asynchronous File Assembly:**
+1. **Assembly**: Combine all chunks in sequential order
+2. **Storage**: Upload complete file to MinIO object storage
+3. **Cleanup**: Remove temporary files and directories
+
+## 🔑 Key Benefits
+
+- **🔄 Idempotency**: `upload_id` prevents duplicate uploads
+- **📦 Chunked Upload**: Handles large files and network interruptions
+- **⚡ Async Processing**: Non-blocking API with background tasks
+- **🔒 Security**: Public/private bucket determination
+- **🎯 Clean Separation**: Each layer has specific responsibilities
+- **📊 Comprehensive Logging**: Full traceability across layers
+- **🛡️ Error Handling**: Graceful failure handling at each layer
+
+This architecture ensures reliable, scalable, and maintainable file upload processing!
+
