@@ -7,7 +7,7 @@ class AppointmentBase(BaseModel):
     name: str
 
 class AppointmentCreate(AppointmentBase):
-    pass
+    user_id: str
 
 class Appointment(AppointmentBase):
     id: str

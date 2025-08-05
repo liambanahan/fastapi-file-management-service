@@ -1,15 +1,16 @@
 import { useState, useEffect } from 'react';
 import FileUploader from './FileUploader';
-import { Appointment, FileData } from '../types';
+import { Appointment, FileData, User } from '../types';
 
 const API_BASE_URL = 'http://localhost:8000/api/v1/file';
 
 interface FileDashboardProps {
   appointment: Appointment;
+  user: User;
   onBack: () => void;
 }
 
-export default function FileDashboard({ appointment, onBack }: FileDashboardProps) {
+export default function FileDashboard({ appointment, user, onBack }: FileDashboardProps) {
   const [files, setFiles] = useState<FileData[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -68,7 +69,8 @@ export default function FileDashboard({ appointment, onBack }: FileDashboardProp
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
             <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-6">Upload New File</h2>
             <FileUploader 
-              appointmentId={appointment.id} 
+              appointmentId={appointment.id}
+              userId={user.id}
               onUploadSuccess={handleUploadSuccess} 
               onUploadComplete={triggerRefresh}
             />

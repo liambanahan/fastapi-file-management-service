@@ -46,7 +46,7 @@ class FileHandler(BaseHandler[FileService]):
             return self.response.error(ErrorResponse(message="An error occurred during chunk upload"), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     async def upload_complete(self, upload_id: str, total_chunks: int, total_size: int, file_extension: FileExtension,
-                              content_type: str, credential: str, detail: str, appointment_id: str, filename: str, size: int = 0) -> JSONResponse:
+                              content_type: str, credential: str, detail: str, appointment_id: str, user_id: str, filename: str, size: int = 0) -> JSONResponse:
         logger.info("=== UPLOAD_COMPLETE HANDLER CALLED ===")
         try:
             logger.info(f"Starting upload_complete for upload_id: {upload_id}")
@@ -63,7 +63,7 @@ class FileHandler(BaseHandler[FileService]):
                 
             payload = UploadFileDTO(upload_id=upload_id, total_chunks=total_chunks, total_size=total_size, file_extension=file_extension,
                                     content_type=content_type, detail=detail_dict, credential=credential_dict, size=size,
-                                    appointment_id=appointment_id, filename=filename)
+                                    appointment_id=appointment_id, user_id=user_id, filename=filename)
             
             logger.info(f"Calling service.upload_complete with payload: {payload}")
             file = await self.service.upload_complete(payload=payload)
@@ -127,8 +127,8 @@ class FileHandler(BaseHandler[FileService]):
             files_response.append(file_resp)
         return self.response.success(content=SuccessResponse[list[FileResponseDTO]](data=files_response))
 
-    async def list_all_files(self) -> JSONResponse:
-        file_tuples = await self.service.list_all_files()
+    async def list_all_files(self, user_id: str) -> JSONResponse:
+        file_tuples = await self.service.list_all_files(user_id)
         files_response = []
         for file, appointment_name in file_tuples:
             download_url = await self.service.get_download_link(file)

@@ -85,6 +85,7 @@ class FileService(BaseService[FileRepo]):
                 credential=payload.credential,
                 celery_task_id=celery_task.id,
                 appointment_id=payload.appointment_id,
+                user_id=payload.user_id,
                 filename=payload.filename
             )
             logger.info(f"Creating file record with DTO: {file_dto}")
@@ -117,8 +118,8 @@ class FileService(BaseService[FileRepo]):
         # In a real app, you'd validate the appointment name here
         return self.repo.get_files_by_appointment(appointment_id)
 
-    async def list_all_files(self) -> list[tuple]:
-        return self.repo.list_all_files()
+    async def list_all_files(self, user_id: str) -> list[tuple]:
+        return self.repo.list_all_files(user_id)
 
     async def delete_file(self, file_id: str):
         # First get the file record to extract MinIO path info

@@ -19,6 +19,7 @@ class UploadFileDTO(BaseModel):
     detail: Optional[Dict[str, Any]]
     credential: Optional[Dict[str, Any]]
     appointment_id: str
+    user_id: str
     filename: str
 
 class FileBaseDTO(BaseModel):
@@ -30,6 +31,7 @@ class FileBaseDTO(BaseModel):
     detail: Optional[Dict[str, Any]]
     celery_task_id: str
     appointment_id: str
+    user_id: str
     filename: str
 
 class FileResponseDTO(BaseModel):

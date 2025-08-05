@@ -2,20 +2,23 @@
 
 import { useState, useEffect } from 'react';
 import FileDashboard from '../components/FileDashboard';
-import { Appointment, FileData } from '../types';
+import LoginPage from '../components/LoginPage';
+import { Appointment, FileData, User } from '../types';
 
 const APPOINTMENTS_API_URL = 'http://localhost:8000/api/v1/appointments';
 const FILES_API_URL = 'http://localhost:8000/api/v1/file/all';
 
 export default function Home() {
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [allFiles, setAllFiles] = useState<FileData[]>([]);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [newAppointmentName, setNewAppointmentName] = useState('');
 
   const fetchAppointments = async () => {
+    if (!currentUser) return;
     try {
-      const response = await fetch(APPOINTMENTS_API_URL);
+      const response = await fetch(`${APPOINTMENTS_API_URL}?user_id=${currentUser.id}`);
       const result = await response.json();
       if (result.success) {
         setAppointments(result.data);
@@ -26,8 +29,9 @@ export default function Home() {
   };
 
   const fetchAllFiles = async () => {
+    if (!currentUser) return;
     try {
-      const response = await fetch(FILES_API_URL);
+      const response = await fetch(`${FILES_API_URL}?user_id=${currentUser.id}`);
       const result = await response.json();
       if (result.success) {
         setAllFiles(result.data);
@@ -38,17 +42,19 @@ export default function Home() {
   };
 
   useEffect(() => {
-    fetchAppointments();
-    fetchAllFiles();
-  }, []);
+    if (currentUser) {
+      fetchAppointments();
+      fetchAllFiles();
+    }
+  }, [currentUser]);
   
   const handleCreateAppointment = async () => {
-    if (!newAppointmentName.trim()) return;
+    if (!newAppointmentName.trim() || !currentUser) return;
     try {
       const response = await fetch(APPOINTMENTS_API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newAppointmentName }),
+        body: JSON.stringify({ name: newAppointmentName, user_id: currentUser.id }),
       });
       const result = await response.json();
       if (result.success) {
@@ -66,20 +72,66 @@ export default function Home() {
     fetchAllFiles();
   };
 
+  const handleUserSelect = (user: User) => {
+    setCurrentUser(user);
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    setSelectedAppointment(null);
+    setAppointments([]);
+    setAllFiles([]);
+  };
+
+  const handleDeleteAppointment = async (appointmentId: string) => {
+    if (!confirm('Are you sure you want to delete this appointment and all its files?')) {
+      return;
+    }
+    
+    try {
+      const response = await fetch(`${APPOINTMENTS_API_URL}/${appointmentId}`, {
+        method: 'DELETE',
+      });
+      const result = await response.json();
+      if (result.success || response.ok) {
+        // Remove the appointment from the local state
+        setAppointments(appointments.filter(appt => appt.id !== appointmentId));
+        // Refresh the files list to remove any files from the deleted appointment
+        fetchAllFiles();
+      }
+    } catch (error) {
+      console.error('Failed to delete appointment:', error);
+    }
+  };
+
+  // Show login page if no user is selected
+  if (!currentUser) {
+    return <LoginPage onUserSelect={handleUserSelect} />;
+  }
+
+  // Show file dashboard if appointment is selected
   if (selectedAppointment) {
-    return <FileDashboard appointment={selectedAppointment} onBack={handleBack} />;
+    return <FileDashboard appointment={selectedAppointment} user={currentUser} onBack={handleBack} />;
   }
 
   return (
     <main className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
       <div className="container mx-auto p-4 sm:p-6 lg:p-8">
-        <header className="text-center mb-12">
-          <h1 className="text-4xl sm:text-5xl font-extrabold text-gray-800 dark:text-white">
-            File Management Dashboard
-          </h1>
-          <p className="text-lg text-gray-500 dark:text-gray-400 mt-2">
-            Organize your appointments and files with ease.
-          </p>
+        <header className="flex justify-between items-center mb-12">
+          <div className="text-center flex-1">
+            <h1 className="text-4xl sm:text-5xl font-extrabold text-gray-800 dark:text-white">
+              File Management Dashboard
+            </h1>
+            <p className="text-lg text-gray-500 dark:text-gray-400 mt-2">
+              Welcome, {currentUser.name}! Organize your appointments and files with ease.
+            </p>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="px-4 py-2 font-semibold text-white bg-gray-600 rounded-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-opacity-50 transition-colors"
+          >
+            Logout
+          </button>
         </header>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -92,11 +144,27 @@ export default function Home() {
                 appointments.map((appt) => (
                   <div
                     key={appt.id}
-                    onClick={() => setSelectedAppointment(appt)}
-                    className="p-4 bg-gray-50 dark:bg-gray-700 border-l-4 border-transparent hover:border-blue-500 rounded-lg cursor-pointer transition-all duration-200 ease-in-out transform hover:scale-105"
+                    className="p-4 bg-gray-50 dark:bg-gray-700 border-l-4 border-transparent hover:border-blue-500 rounded-lg transition-all duration-200 ease-in-out"
                   >
-                    <p className="font-semibold text-lg text-gray-800 dark:text-white">{appt.name}</p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">{new Date(appt.date).toLocaleDateString()}</p>
+                    <div className="flex items-center justify-between">
+                      <div 
+                        onClick={() => setSelectedAppointment(appt)}
+                        className="flex-1 cursor-pointer"
+                      >
+                        <p className="font-semibold text-lg text-gray-800 dark:text-white">{appt.name}</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">{new Date(appt.date).toLocaleDateString()}</p>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteAppointment(appt.id);
+                        }}
+                        className="ml-3 px-3 py-1 text-sm font-semibold text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 transition-colors"
+                        title="Delete appointment and all its files"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
                 ))
               ) : (

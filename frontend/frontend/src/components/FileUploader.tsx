@@ -28,13 +28,14 @@ interface UploadCompleteResponse {
 
 interface FileUploaderProps {
   appointmentId: string;
+  userId: string;
   onUploadSuccess: (newFile: FileData) => void;
   onUploadComplete: () => void;
 }
 
 const API_BASE_URL = 'http://localhost:8000/api/v1/file';
 
-export default function FileUploader({ appointmentId, onUploadSuccess, onUploadComplete }: FileUploaderProps) {
+export default function FileUploader({ appointmentId, userId, onUploadSuccess, onUploadComplete }: FileUploaderProps) {
   const [file, setFile] = useState<File | null>(null);
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState('Click or drag to select a file');
@@ -107,6 +108,7 @@ export default function FileUploader({ appointmentId, onUploadSuccess, onUploadC
       completeFormData.append('file_extension', fileExtension);
       completeFormData.append('content_type', file.type);
       completeFormData.append('appointment_id', appointmentId);
+      completeFormData.append('user_id', userId);
       completeFormData.append('filename', file.name);
       
       const completeResponse = await fetch(`${API_BASE_URL}/upload/complete/`, {

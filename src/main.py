@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
-from api.routes import file, appointment
+from api.routes import file, appointment, user
 from exceptions.handler import ExceptionHandler
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -84,6 +84,7 @@ def create_application() -> FastAPI:
     
     app.include_router(file.router)
     app.include_router(appointment.router)
+    app.include_router(user.router)
     ExceptionHandler(app)
     return app
 

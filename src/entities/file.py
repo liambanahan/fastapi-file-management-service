@@ -11,6 +11,7 @@ class File(db.Base):
     upload_id = Column(String(36), nullable=False, unique=True, index=True)
     filename = Column(String(255), nullable=False)
     appointment_id = Column(VARCHAR(36), ForeignKey("appointments.id"), nullable=False)
+    user_id = Column(VARCHAR(36), ForeignKey("users.id"), nullable=False)
     credential = Column(JSON(none_as_null=True))
     path = Column(VARCHAR(255), nullable=False)
     content_type = Column(String(32), nullable=False)
@@ -18,4 +19,6 @@ class File(db.Base):
     detail = Column(JSON(none_as_null=True))
     celery_task_id = Column(String(36))
 
+    # Relationships
     appointment = relationship("Appointment", back_populates="files")
+    user = relationship("User", back_populates="files")

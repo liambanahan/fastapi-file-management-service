@@ -23,6 +23,7 @@ class FileRepo(BaseRepo[File]):
             detail=file.detail,
             celery_task_id=file.celery_task_id,
             appointment_id=file.appointment_id,
+            user_id=file.user_id,
             filename=file.filename
         )
         return self.create(db_file)
@@ -30,8 +31,8 @@ class FileRepo(BaseRepo[File]):
     def get_files_by_appointment(self, appointment_id: str) -> list[File]:
         return self.db.query(self.model).filter(self.model.appointment_id == appointment_id).all()
 
-    def list_all_files(self) -> list[tuple]:
-        return self.db.query(self.model, Appointment.name).join(Appointment, self.model.appointment_id == Appointment.id).all()
+    def list_all_files(self, user_id: str) -> list[tuple]:
+        return self.db.query(self.model, Appointment.name).join(Appointment, self.model.appointment_id == Appointment.id).filter(self.model.user_id == user_id).all()
 
     def delete_file(self, file_id: str):
         file_to_delete = self.get(id=file_id)
