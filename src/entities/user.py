@@ -8,7 +8,8 @@ from datetime import datetime
 class User(db.Base):
     __tablename__ = "users"
     id = Column(VARCHAR(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    name = Column(String(255), nullable=False, unique=True, index=True)
+    # Name is not required to be unique globally
+    name = Column(String(255), nullable=False, index=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 

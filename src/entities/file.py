@@ -14,11 +14,13 @@ class File(db.Base):
     appointment_id = Column(VARCHAR(36), ForeignKey("appointments.id"), nullable=False)
     user_id = Column(VARCHAR(36), ForeignKey("users.id"), nullable=False)
     credential = Column(JSON(none_as_null=True))
-    path = Column(VARCHAR(255), nullable=False)
+    # Path must be globally unique per stored object
+    path = Column(VARCHAR(255), nullable=False, unique=True, index=True)
     content_type = Column(String(32), nullable=False)
     size = Column(Integer)
     detail = Column(JSON(none_as_null=True))
-    celery_task_id = Column(String(36))
+    # Reference Celery task by its unique task_id
+    celery_task_id = Column(String(255), ForeignKey("celery_tasks.task_id"))
     
     # Virus scanning fields
     virus_scan_status = Column(String(20), default='pending')  # 'pending', 'clean', 'infected', 'error', 'disabled'
@@ -30,3 +32,4 @@ class File(db.Base):
     # Relationships
     appointment = relationship("Appointment", back_populates="files")
     user = relationship("User", back_populates="files")
+    celery_task = relationship("CeleryTask", foreign_keys=[celery_task_id])
