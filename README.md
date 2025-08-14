@@ -63,8 +63,10 @@ This microservice is designed to manage all file-related tasks. It uses **MinIO*
         ```
 
 5. **Access the Service**:
-    - The project is now up and running, accessible on port `8000`.
-    - You can access the project documentation by navigating to `/docs` on your browser.
+    - Use the site via the Caddy proxy at `https://localhost:9443` (recommended for local dev; HTTPS with Caddy's internal CA).
+    - API is reachable at `https://localhost:9443/api/...` (proxied to FastAPI on `filemanager:8000`).
+    - Next.js dev server runs on `http://localhost:3000`, but access it through the proxy at `https://localhost:9443` so the app and API share the same HTTPS origin.
+    - Swagger docs: `https://localhost:9443/api/docs`.
 
 ## Local HTTPS Trust (Caddy Internal CA)
 
@@ -72,9 +74,9 @@ If you are accessing the API via `https://localhost:9443` through Caddy, trust C
 
 ```cmd
 curl -k https://localhost:9443/minio/health/ready
-docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt .\caddy-local-root.crt\
+docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt .\caddy-local-root.crt
 ```
-run this third one in an elevated cmd prompt
+Run this third one in an elevated cmd prompt:
 ```cmd
 certutil -addstore -f "Root" "%CD%\caddy-local-root.crt"
 ```
@@ -83,6 +85,22 @@ Notes:
 - First command triggers certificate generation inside the Caddy container.
 - Second copies the CA root cert to your current directory.
 - Third adds it to the Windows Trusted Root store so the browser trusts `https://localhost:9443`.
+
+## Access and Ports (Dev vs Production)
+
+- **Web UI (dev)**: `https://localhost:9443` via Caddy. Caddy proxies the Next.js dev server on `localhost:3000` and the API on `filemanager:8000`.
+- **MinIO Console (dev)**: `https://localhost:9443/console` (proxied to `minio:9090`).
+- **Direct service ports (exposed for local development only)**:
+  - FastAPI API: `8000`
+  - Next.js dev: `3000` (host machine)
+  - MinIO API: `9001` (maps to container `9000`)
+  - MinIO Console: `9090`
+  - MySQL: `3307` (maps to container `3306`)
+  - RabbitMQ: `5672` (broker), `15672` (management UI)
+  - ClamAV daemon: `3310`
+  - ClamAV REST (Node): `9002` (maps to container `3000`)
+
+In **production**, these backend service ports should not be exposed directly. Place services behind a reverse proxy/load balancer (e.g., Caddy/Ingress) and expose only the proxy (typically `443/80`).
 
 ## API Endpoints
 

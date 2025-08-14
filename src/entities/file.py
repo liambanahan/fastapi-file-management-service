@@ -20,7 +20,7 @@ class File(db.Base):
     size = Column(Integer)
     detail = Column(JSON(none_as_null=True))
     # Reference Celery task by its unique task_id
-    celery_task_id = Column(String(255), ForeignKey("celery_tasks.task_id"))
+    celery_task_id = Column(String(255))
     
     # Virus scanning fields
     virus_scan_status = Column(String(20), default='pending')  # 'pending', 'clean', 'infected', 'error', 'disabled'
@@ -32,4 +32,4 @@ class File(db.Base):
     # Relationships
     appointment = relationship("Appointment", back_populates="files")
     user = relationship("User", back_populates="files")
-    celery_task = relationship("CeleryTask", foreign_keys=[celery_task_id])
+    # Relationship to CeleryTask is optional and no longer enforced via FK
