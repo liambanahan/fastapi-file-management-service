@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import FileUploader from './FileUploader';
 import { Appointment, FileData, User } from '../types';
 
-const API_BASE_URL = 'http://localhost:8000/api/v1/file';
+const API_BASE_URL = '/api/v1/file';
 
 interface FileDashboardProps {
   appointment: Appointment;

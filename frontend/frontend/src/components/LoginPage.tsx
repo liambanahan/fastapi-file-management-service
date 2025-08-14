@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { User } from '../types';
 
-const USERS_API_URL = 'http://localhost:8000/api/v1/users';
+const USERS_API_URL = '/api/v1/users/';
 
 interface LoginPageProps {
   onUserSelect: (user: User) => void;
@@ -15,6 +15,7 @@ export default function LoginPage({ onUserSelect }: LoginPageProps) {
 
   const fetchUsers = async () => {
     try {
+      console.log('USERS_API_URL =', USERS_API_URL);
       const response = await fetch(USERS_API_URL);
       const result = await response.json();
       if (result.success) {

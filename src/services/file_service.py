@@ -21,6 +21,7 @@ from infrastructure.virus_scanner import virus_scanner
 import logging
 import traceback
 from datetime import datetime
+from urllib.parse import quote
 
 logger = logging.getLogger(__name__)
 
@@ -171,8 +172,13 @@ class FileService(BaseService[FileRepo]):
             # Create Celery task (only if not quarantined)
             celery_task_id = ""
             if not is_quarantined:
-                celery_task = upload_file_task.delay(bucket=bucket, upload_id=payload.upload_id,
-                                                     total_chunks=payload.total_chunks, filename=filename)
+                celery_task = upload_file_task.delay(
+                    bucket=bucket,
+                    upload_id=payload.upload_id,
+                    total_chunks=payload.total_chunks,
+                    filename=filename,
+                    content_type=payload.content_type,
+                )
                 celery_task_id = celery_task.id
                 logger.info(f"Celery task created with ID: {celery_task.id}")
 
@@ -222,14 +228,52 @@ class FileService(BaseService[FileRepo]):
 
     async def get_download_link(self, file: File) -> str:
         bucket_name = file.path.split("/")[0]
-        filename = "/".join(file.path.split("/")[1:])
+        object_name = "/".join(file.path.split("/")[1:])
+
+        # Choose inline vs attachment based on content type
+        disposition_type = self._should_display_inline(file.content_type)
+
+        # Set filename via Content-Disposition for correct save-as name
+        # Use both filename and RFC 5987 filename* for better compatibility
+        safe_filename = file.filename or object_name
+        disposition = f"{disposition_type}; filename=\"{safe_filename}\"; filename*=UTF-8''{quote(safe_filename)}"
+
         if not file.credential:
-            return minioStorage.get_url(bucket_name=bucket_name, object_name=filename)
+            # Prefer presigned URL (for filename headers). Fallback to direct HTTPS URL if signing fails.
+            try:
+                return minioStorage.get_presigned_url(
+                    method="GET",
+                    bucket_name=bucket_name,
+                    object_name=object_name,
+                    response_headers={"response-content-disposition": disposition},
+                )
+            except Exception as e:
+                logger.error(f"Presign failed for public object {bucket_name}/{object_name}: {str(e)}")
+                # Fallback to direct external URL (no Content-Disposition control)
+                return f"https://{config.MINIO_EXTERNAL_ENDPOINT}/{bucket_name}/{object_name}"
         else:
+            # Ensure credential values are strings for signing
             for key, value in file.credential.items():
                 if not isinstance(value, str):
                     file.credential[key] = str(value)
-            return minioStorage.get_presigned_url("GET", bucket_name=bucket_name, object_name=filename, extra_query_params=file.credential)
+            # For private files, presign is required; let exceptions bubble up to surface the error
+            return minioStorage.get_presigned_url(
+                method="GET",
+                bucket_name=bucket_name,
+                object_name=object_name,
+                response_headers={"response-content-disposition": disposition},
+                extra_query_params=file.credential,
+            )
+
+    def _should_display_inline(self, content_type: Optional[str]) -> str:
+        """Return 'inline' for content types we want to display in-browser, else 'attachment'."""
+        if not content_type:
+            return "attachment"
+        normalized = content_type.lower()
+        # Display PDFs and images inline by default
+        if normalized == "application/pdf" or normalized.startswith("image/"):
+            return "inline"
+        return "attachment"
 
 
     async def get_files_by_appointment(self, appointment_id: str) -> list[File]:

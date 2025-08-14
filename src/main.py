@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 from api.routes import file, appointment, user
 from exceptions.handler import ExceptionHandler
 from fastapi.middleware.cors import CORSMiddleware
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from contextlib import asynccontextmanager
 from infrastructure.minio import minioStorage
 from api.responses.response import ErrorResponse
@@ -54,10 +55,17 @@ async def lifespan(app: FastAPI):
 def create_application() -> FastAPI:
     app = FastAPI(lifespan=lifespan)
 
+    # Honor X-Forwarded-Proto/For from Caddy so generated redirects use https
+    app.add_middleware(ProxyHeadersMiddleware)
+
     # Add CORS middleware FIRST
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:3000"], #allow frontend to access the backend
+        # Allow both http and https localhost (Next.js dev often runs on http)
+        allow_origins=[
+            "http://localhost:3000",
+            "https://localhost:3000",
+        ],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -75,7 +83,12 @@ def create_application() -> FastAPI:
         )
         
         # Manually add CORS headers to ensure they're present
-        response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000"
+        # Mirror the primary dev origins; browsers require exact match when credentials=true
+        origin = request.headers.get("origin")
+        if origin in {"http://localhost:3000", "https://localhost:3000"}:
+            response.headers["Access-Control-Allow-Origin"] = origin
+        else:
+            response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000"
         response.headers["Access-Control-Allow-Credentials"] = "true"
         response.headers["Access-Control-Allow-Methods"] = "*"
         response.headers["Access-Control-Allow-Headers"] = "*"

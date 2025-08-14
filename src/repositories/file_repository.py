@@ -34,10 +34,27 @@ class FileRepo(BaseRepo[File]):
         return self.create(db_file)
 
     def get_files_by_appointment(self, appointment_id: str) -> list[File]:
-        return self.db.query(self.model).filter(self.model.appointment_id == appointment_id).all()
+        return (
+            self.db
+            .query(self.model)
+            .filter(
+                self.model.appointment_id == appointment_id,
+                self.model.virus_scan_status != 'infected'
+            )
+            .all()
+        )
 
     def list_all_files(self, user_id: str) -> list[tuple]:
-        return self.db.query(self.model, Appointment.name).join(Appointment, self.model.appointment_id == Appointment.id).filter(self.model.user_id == user_id).all()
+        return (
+            self.db
+            .query(self.model, Appointment.name)
+            .join(Appointment, self.model.appointment_id == Appointment.id)
+            .filter(
+                self.model.user_id == user_id,
+                self.model.virus_scan_status != 'infected'
+            )
+            .all()
+        )
 
     def delete_file(self, file_id: str):
         file_to_delete = self.get(id=file_id)

@@ -33,6 +33,21 @@ services:
     networks:
       - filemanager
 
+  caddy:
+    image: caddy:2
+    container_name: caddy
+    depends_on:
+      - minio
+    ports:
+      - "80:80"      # HTTP (redirects to HTTPS). Fixes stray http://localhost requests
+      - "9443:443"   # HTTPS for local dev
+      - "9080:80"    # HTTP (redirects to HTTPS by default)
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data  # persist Caddy data (includes local CA)
+    networks:
+      - filemanager
+
   db-mysql:
     image: mysql:8.0
     container_name: mysql
@@ -109,6 +124,7 @@ volumes:
   minio_data:
   rabbitmq_data:
   clamav_data: 
+  caddy_data:
 
 networks:
   filemanager:

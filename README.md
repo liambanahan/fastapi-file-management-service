@@ -9,6 +9,7 @@
 4. [How to Use it?](#how-to-use-it)
 5. [API Endpoints](#api-endpoints)
 6. [Contributing](#Contributing)
+7. [Local HTTPS Trust (Caddy Internal CA)](#local-https-trust-caddy-internal-ca)
 
 ## Introduction
 
@@ -64,6 +65,24 @@ This microservice is designed to manage all file-related tasks. It uses **MinIO*
 5. **Access the Service**:
     - The project is now up and running, accessible on port `8000`.
     - You can access the project documentation by navigating to `/docs` on your browser.
+
+## Local HTTPS Trust (Caddy Internal CA)
+
+If you are accessing the API via `https://localhost:9443` through Caddy, trust Caddy's local root CA once on your machine (Windows example, run from the project folder):
+
+```cmd
+curl -k https://localhost:9443/minio/health/ready
+docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt .\caddy-local-root.crt\
+```
+run this third one in an elevated cmd prompt
+```cmd
+certutil -addstore -f "Root" "%CD%\caddy-local-root.crt"
+```
+
+Notes:
+- First command triggers certificate generation inside the Caddy container.
+- Second copies the CA root cert to your current directory.
+- Third adds it to the Windows Trusted Root store so the browser trusts `https://localhost:9443`.
 
 ## API Endpoints
 

@@ -33,7 +33,7 @@ interface FileUploaderProps {
   onUploadComplete: () => void;
 }
 
-const API_BASE_URL = 'http://localhost:8000/api/v1/file';
+const API_BASE_URL = '/api/v1/file';
 
 export default function FileUploader({ appointmentId, userId, onUploadSuccess, onUploadComplete }: FileUploaderProps) {
   const [file, setFile] = useState<File | null>(null);
@@ -41,6 +41,7 @@ export default function FileUploader({ appointmentId, userId, onUploadSuccess, o
   const [status, setStatus] = useState('Click or drag to select a file');
   const [uploadedFile, setUploadedFile] = useState<FileData | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [virusWarning, setVirusWarning] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -49,6 +50,7 @@ export default function FileUploader({ appointmentId, userId, onUploadSuccess, o
       setStatus(`Selected file: ${e.target.files[0].name}`);
       setProgress(0);
       setUploadedFile(null);
+      setVirusWarning(null);
     }
   };
 
@@ -61,6 +63,7 @@ export default function FileUploader({ appointmentId, userId, onUploadSuccess, o
     setIsUploading(true);
     setUploadedFile(null);
     setProgress(0);
+    setVirusWarning(null);
 
     try {
       // 1. Initialize Upload
@@ -116,7 +119,17 @@ export default function FileUploader({ appointmentId, userId, onUploadSuccess, o
         body: completeFormData,
       });
 
-      if (!completeResponse.ok) throw new Error('Failed to complete upload.');
+      if (!completeResponse.ok) {
+        // Try to parse the error response
+        try {
+          const errorData = await completeResponse.json();
+          const errorMessage = errorData.message || errorData.errors?.[0] || 'Failed to complete upload.';
+          throw new Error(errorMessage);
+        } catch (parseError) {
+          // If we can't parse the error response, use a generic message
+          throw new Error('Failed to complete upload.');
+        }
+      }
 
       const completeJson: SuccessResponse<UploadCompleteResponse> = await completeResponse.json();
       
@@ -135,7 +148,14 @@ export default function FileUploader({ appointmentId, userId, onUploadSuccess, o
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
-      setStatus(`Error: ${errorMessage}`);
+      
+      // Check if this is a virus detection error
+      if (errorMessage.toLowerCase().includes('virus') || errorMessage.toLowerCase().includes('malware') || errorMessage.toLowerCase().includes('infected')) {
+        setVirusWarning('⚠️ A virus has been detected in the file you have attempted to upload. The file has been quarantined for security.');
+        setStatus('File rejected due to security concerns.');
+      } else {
+        setStatus(`Error: ${errorMessage}`);
+      }
       setProgress(0);
     } finally {
       setIsUploading(false);
@@ -177,6 +197,15 @@ export default function FileUploader({ appointmentId, userId, onUploadSuccess, o
             className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
             style={{ width: `${progress}%` }}
           ></div>
+        </div>
+      )}
+
+      {virusWarning && (
+        <div className="mt-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg text-center">
+          <p className="font-semibold text-red-800 dark:text-red-300">{virusWarning}</p>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+            Please ensure your files are virus-free before uploading.
+          </p>
         </div>
       )}
 

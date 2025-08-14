@@ -4,6 +4,7 @@ from minio import Minio
 from minio.helpers import ObjectWriteResult
 from typing import Self
 import json
+from urllib.parse import urlsplit, urlunsplit
 
 
 class MinioStorage:
@@ -127,7 +128,38 @@ class MinioStorage:
         :param extra_query_params: Extra query parameters for advanced usage.
         :return: URL string.
         """
-        return self.client.get_presigned_url(method, bucket_name, object_name, expires, response_headers, request_date, version_id, extra_query_params)
+        # If an external endpoint is configured, generate the signature using that endpoint
+        # so the Host header in the signature matches what the browser will request.
+        if config.MINIO_EXTERNAL_ENDPOINT:
+            # Always use HTTPS when generating browser-facing URLs in production
+            external_client = Minio(
+                config.MINIO_EXTERNAL_ENDPOINT,
+                access_key=config.MINIO_ACCESS_KEY,
+                secret_key=config.MINIO_SECRET_KEY,
+                secure=True,
+            )
+            return external_client.get_presigned_url(
+                method,
+                bucket_name,
+                object_name,
+                expires,
+                response_headers,
+                request_date,
+                version_id,
+                extra_query_params,
+            )
+
+        # Default: sign with the internal client/endpoint
+        return self.client.get_presigned_url(
+            method,
+            bucket_name,
+            object_name,
+            expires,
+            response_headers,
+            request_date,
+            version_id,
+            extra_query_params,
+        )
 
     def get_url(self, bucket_name, object_name):
         return f"{config.MINIO_URL}/{bucket_name}/{object_name}"

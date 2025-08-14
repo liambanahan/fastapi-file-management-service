@@ -5,8 +5,9 @@ import FileDashboard from '../components/FileDashboard';
 import LoginPage from '../components/LoginPage';
 import { Appointment, FileData, User } from '../types';
 
-const APPOINTMENTS_API_URL = 'http://localhost:8000/api/v1/appointments';
-const FILES_API_URL = 'http://localhost:8000/api/v1/file/all';
+// Use same-origin relative URLs so requests go through the Caddy origin
+const APPOINTMENTS_API_URL = '/api/v1/appointments/';
+const FILES_API_URL = '/api/v1/file/all';
 
 export default function Home() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
